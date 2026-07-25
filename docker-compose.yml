@@ -1,0 +1,20 @@
+version: '3.8'
+services:
+  backend:
+    build: ./backend
+    #使用./backend文件来构建镜像
+    ports:
+      - "8000:8000"
+    #把容器内部的端口映射到宿主机
+    environment:
+      - ENV=dev
+    volumes:
+      - ./backend/app:/app/app  #挂载本地代码，改完就生效（不用rebuild）
+      #挂载之后，本地修改代码保存之后直接通过“管道”同步进容器内部，加上--reload参数，Uvicorn检测到文件夹变了，瞬间自动重启服务，刷新浏览器就能看到效果
+      #挂载的价值--实现“本地写代码，容器里热更新”
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "80:80"

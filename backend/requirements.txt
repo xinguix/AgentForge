@@ -1,0 +1,5 @@
+fastapi==0.115.0
+uvicorn[standard]==0.30.0
+python-dotenv==1.0.0
+#是一个第三方库，不是解释器python
+pydantic-settings==2.4.0

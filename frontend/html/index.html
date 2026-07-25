@@ -1,0 +1,15 @@
+<!-- frontend/html/index.html -->
+<!DOCTYPE html>
+<html>
+<head><title>AgentForge</title></head>
+<body>
+    <h1>AgentForge Running</h1>
+    <p id="status">检测后端...</p>
+    <script>
+        fetch("/api/health")
+            .then(r => r.json())
+            .then(d => document.getElementById("status").innerText = "后端状态: " + d.status)
+            .catch(() => document.getElementById("status").innerText = "后端连接失败");
+    </script>
+</body>
+</html>
