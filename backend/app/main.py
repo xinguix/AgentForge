@@ -2,6 +2,8 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from .core.config import settings
+from .core.database import engine, Base
+from .models import *
 
 #配置日志（PyCharm底部的Run窗口会显示这些彩色日志）
 logging.basicConfig(level=logging.INFO,format='%(asctime)s - %(levelname)s - %(message)s')
@@ -12,10 +14,13 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     #启动前（将来这里放Redis、DB连接池）
-    logger.info(f"{settings.project_name}正在启动（环境：{settings.env}）...")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    logger.info(f"{settings.project_name}数据库检查/创建完成")
     yield
-    #关闭后
-    logger.info(f"{settings.project_name}正在优雅关闭...")
+    #关闭后：释放连接池
+    await engine.dispose()
+    logger.info(f"{settings.project_name}数据库连接已释放")
 
 app = FastAPI(title=settings.project_name,lifespan=lifespan)
 
