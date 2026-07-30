@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from .core.config import settings
 from .core.database import engine, Base
+from .core.graph import get_graph
 from .models import *
 from .api.v1 import agents, chat
 
@@ -14,10 +15,15 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    #启动前
+    #启动前1.新建一个数据库
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     logger.info(f"{settings.project_name}数据库检查/创建完成")
+    #2.提前编译Langgraph(预热)
+    logging.info("正在编译LangGraph工作流...")
+    graph = get_graph()
+    logging.info(f"LangGraph编译完成，节点数:{len(graph.nodes)}")
+
     yield
     #关闭后：释放连接池
     await engine.dispose()
