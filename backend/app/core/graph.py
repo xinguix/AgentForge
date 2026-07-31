@@ -1,3 +1,6 @@
+import logging
+from _curses import raw
+
 from langchain_core.messages import HumanMessage, AIMessage ,SystemMessage
 from langgraph.graph import StateGraph, START, END
 from typing import Literal
@@ -6,6 +9,7 @@ from .state import AgentState
 from .llm import get_llm
 from ..core.config import settings
 
+logger = logging.getLogger(__name__)
 #初始化LLM(复用单例)
 llm = get_llm()
 
@@ -15,17 +19,27 @@ async def agent_node(state: AgentState) -> dict:
     核心Agnet节点：接受当前messages,调用LLM,返回新的AIMessage
     返回值会通过reducer(operator.add)自动追加到state['messages']末尾
     """
-
+    raw_messages = state.get("messages",[])
+    logger.info(f"DEBUG: raw_messages = {raw_messages}")
     #1.从状态中取出所有历史消息
-    messages = state.get("messages",[])
-
+    flat_messages = []
+    for m in raw_messages:
+       if isinstance(m, list):
+           flat_messages.extend(m)
+       else:
+           flat_messages.append(m)
+    logger.debug(f"展平后消息列表 = {flat_messages}")
     #2.如果没有系统消息，加一个默认的（这是防御性编程）
-    if not any(isinstance(m, SystemMessage) for m in messages):
-        system_prompt = SystemMessage(content="你是一个专业、严谨的AI助手，请准确的回答用户的问题。")
-        messages= [system_prompt] + messages
+
+    if not any(isinstance(m, SystemMessage) for m in flat_messages):
+        flat_messages = [SystemMessage(content="你是一个专业、严谨的AI助手，请准确回答用户的问题。")] + flat_messages
 
     #3.异步调用LLM（注意：这里传入的是BaseMessage列表，Langchain自动识别）
-    response = await llm.ainvoke(messages)
+    try:
+        response = await llm.ainvoke(flat_messages)
+    except Exception as e:
+        logger.error(f"LLM调用失败：{e}")
+        raise
 
     #4.返回更新（只返回新增的AI消息，LangGraph自动append）
     return {"messages": [response]}
