@@ -55,6 +55,7 @@ AgentForge/
 |  |   |--schemas/          #Pydantic 请求、响应体
 |  |   |--services/         #业务逻辑（Agent 编排、对话处理）
 |  | --Dockerfile
+|  | --main.py
 |  | --requirements.txt
 |--docker
 |--frontend/

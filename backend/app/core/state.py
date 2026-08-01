@@ -3,6 +3,9 @@ from typing_extensions import TypedDict
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
 import operator
 
+from ..schemas.plan import Plan
+
+
 class AgentState(TypedDict):
     """LangGraph的全局状态"""
     #Annotated[list, operator.add]表示这个字段是累加的
@@ -15,3 +18,9 @@ class AgentState(TypedDict):
 
     #中间思考过程
     intermediate_steps: Optional[List[Dict[str, Any]]]
+
+    #当前执行计划（整个plan对象）
+    plan: Optional[Plan]
+
+    #当前执行到第几步（从0开始）
+    current_step_index: int

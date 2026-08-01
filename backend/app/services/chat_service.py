@@ -35,7 +35,7 @@ class ChatService:
         #3.异步调用图（ainvoke）
         #注意：图会一直执行到触发END节点
         final_state = await graph.ainvoke(initial_state)
-
+        print("生成的计划", final_state.get("plan"))
         #4.从最终状态中提取AI的答复
         # final_state["messages"]是所有消息的列表，最后一条是AI的回复
         ai_messages = [msg for msg in final_state.get("messages",[]) if isinstance(msg, AIMessage)]

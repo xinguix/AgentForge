@@ -8,6 +8,7 @@ from typing import Literal
 from .state import AgentState
 from .llm import get_llm
 from ..core.config import settings
+from .planner import planner_node
 
 logger = logging.getLogger(__name__)
 #初始化LLM(复用单例)
@@ -57,9 +58,13 @@ def build_agent_graph():
     #1.创建状态图（指定状态类型）
     workflow = StateGraph(AgentState)
     #2.添加节点
-    workflow.add_node("agent",agent_node)#"agent"是这个节点名称
+    #workflow.add_node("agent",agent_node)#"agent"是这个节点名称
+    workflow.add_node("planner", planner_node)
+    workflow.add_edge(START, "planner")
+    workflow.add_edge("planner", END)
 
     #3.添加边
+    """
     workflow.add_edge(START, "agent")  #从开始->agent
     workflow.add_conditional_edges(
         "agent",    #从agent节点出发
@@ -67,7 +72,7 @@ def build_agent_graph():
         {
             END: END   #如果返回END,就结束
         }
-    )
+    )"""
 
     #4.编译（编译后才能invole）
     graph = workflow.compile()
