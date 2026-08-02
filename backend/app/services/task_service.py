@@ -54,15 +54,18 @@ class TaskService:
         graph = get_graph()
         final_state = await graph.ainvoke(initial_state)
 
-        #3.提取结果
-        plan_obj = final_state.get("plan")
+        review_status = final_state.get("review_status", "unknown")
         intermediate = final_state.get("intermediate_steps", [])
 
+        plan_obj = final_state.get("plan")
+
         #4.整理搜索结果（写入output字段，方便前端展示）
-        output_text = "执行结果：\n"
-        for step in intermediate:
+        output_text = f"任务执行完成。审查结果：{review_status}\n"
+        output_text += "=" * 40 + "\n"
+        for idx, step in enumerate(intermediate):
             if "search_result" in step:
-                output_text += f"步骤 {step['step_id']} - {step['step_description']}:\n{step['search_result'][:200]}...\n\n"
+                output_text += f"步骤 {step['step_id']} - {step['step_description']}:\n"
+                output_text += f"{step['search_result'][:300]}...\n\n"
                 #把step_id 、描述、搜索结果（截取前200字符）拼接到output_text中，用于前端展示
 
         #3.创建Task记录

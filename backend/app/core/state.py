@@ -1,4 +1,4 @@
-from typing import List, Dict, Optional, Any, Annotated
+from typing import List, Dict, Optional, Any, Annotated, Literal
 from typing_extensions import TypedDict
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
 import operator
@@ -24,3 +24,10 @@ class AgentState(TypedDict):
 
     #当前执行到第几步（从0开始）
     current_step_index: int
+
+    #审查结果（pass/fail/retry）  #retry：重试
+    review_status: Optional[Literal["pass", "fail", "retry"]]
+    #literal:只允许返回括号里的内容（三选一）
+
+    #当前步骤的重试次数（防止无限循环）
+    retry_count: int

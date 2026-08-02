@@ -1,3 +1,4 @@
+
 from fastapi import APIRouter, Depends, HTTPException,status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
@@ -20,6 +21,8 @@ async def create_plan_task(
         task = await TaskService.create_planning_task(db, task_data, FIXED_USER_ID)
         return task
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500,detail=f"任务创建失败：{str(e)}")
 
 @router.get("/{task_id}", response_model=TaskResponse)

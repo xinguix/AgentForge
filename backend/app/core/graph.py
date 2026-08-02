@@ -1,10 +1,10 @@
 import logging
-from _curses import raw
 
 from langchain_core.messages import HumanMessage, AIMessage ,SystemMessage
 from langgraph.graph import StateGraph, START, END
 from typing import Literal
 
+from .reviewer import review_node
 from .state import AgentState
 from .llm import get_llm
 from ..core.config import settings
@@ -14,6 +14,7 @@ from .research import research_node
 logger = logging.getLogger(__name__)
 #初始化LLM(复用单例)
 llm = get_llm()
+MAX_RETRIES = 2
 
 #1.节点1：Agent调用
 async def agent_node(state: AgentState) -> dict:
@@ -47,7 +48,7 @@ async def agent_node(state: AgentState) -> dict:
     return {"messages": [response]}
 
 #节点二：路由决策
-def should_continue(state: AgentState) -> Literal["research", END]:
+def should_continue(state: AgentState) -> Literal["research", "reviewer"]:
     """
     条件边：决定下一步去哪里
     条件路由：如果还有Research步骤未执行，继续走research 节点;
@@ -65,8 +66,28 @@ def should_continue(state: AgentState) -> Literal["research", END]:
 
     current_step = steps[current_idx]
     if current_step.agent_type == "research":
+        retry_count = state.get("retry_count", 0)
+        if retry_count >= MAX_RETRIES:
+            return END
+        return "research"
+    elif current_step.agent_type == "reviewer":
+        return "reviewer"
+    else:
+        return END
+
+def route_after_reviewer(state: AgentState) -> Literal["research", END]:
+    """
+    Reviewer: 执行后的条件边：通过则结束，不通过则回到research 重试
+    """
+    status = state.get("review_status", "pass")
+    retry_count = state.get("retry_count", 0)
+
+    if status in ["fail", "retry"] and retry_count < MAX_RETRIES:
+        #需要重试，回到research节点
+        #注意：current_step_index不变，所以会执行同一个步骤
         return "research"
     else:
+        #通过，或者重试次数用尽，结束
         return END
 
 #构建图
@@ -77,6 +98,8 @@ def build_agent_graph():
     #workflow.add_node("agent",agent_node)#"agent"是这个节点名称
     workflow.add_node("planner", planner_node)
     workflow.add_node("research", research_node)
+    workflow.add_node("reviewer", review_node)
+
     workflow.add_edge(START, "planner")
     workflow.add_edge("planner", "research")
 
@@ -85,8 +108,20 @@ def build_agent_graph():
         "research",
         should_continue,
         {
-            "research": "research",  #如果还有研究步骤，循环
+            "research": "research",
+            #如果还有研究步骤，循环
+            "reviewer": "reviewer",
             END: END   #否则结束
+        }
+    )
+
+    #Reviewer的条件边（决定是重试还是结束）
+    workflow.add_conditional_edges(
+        "reviewer",
+        route_after_reviewer,
+        {
+            "research": "research", #重试
+            END: END   #通过
         }
     )
 
