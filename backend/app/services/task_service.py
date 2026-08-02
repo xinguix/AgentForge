@@ -8,6 +8,7 @@ from ..core.planner import planner_node
 from ..core.state import AgentState
 from ..models.task import Task
 from ..schemas.task import TaskCreate
+from ..core.graph import get_graph
 
 
 class TaskService:
@@ -22,7 +23,7 @@ class TaskService:
         :param task_data: 存入数据库
         :return: Task对象
         """
-        #0.去重：调用planner钱，先看这个用户是不是已经有了相同的input还在planning的任务
+        #0.去重：调用planner前，先看这个用户是不是已经有了相同的input还在planning的任务
         existing = await db.execute(
             select(Task).where(
                 Task.user_id == user_id,
@@ -50,17 +51,29 @@ class TaskService:
 
         #2.调用Planner节点
         #注意：planner_node返回的是（“plan”: plan, "current_step_index": 0）
-        result = await planner_node(initial_state)
-        plan_obj = result.get("plan")
+        graph = get_graph()
+        final_state = await graph.ainvoke(initial_state)
+
+        #3.提取结果
+        plan_obj = final_state.get("plan")
+        intermediate = final_state.get("intermediate_steps", [])
+
+        #4.整理搜索结果（写入output字段，方便前端展示）
+        output_text = "执行结果：\n"
+        for step in intermediate:
+            if "search_result" in step:
+                output_text += f"步骤 {step['step_id']} - {step['step_description']}:\n{step['search_result'][:200]}...\n\n"
+                #把step_id 、描述、搜索结果（截取前200字符）拼接到output_text中，用于前端展示
 
         #3.创建Task记录
         new_task = Task(
             id = str(uuid.uuid4()),
             user_id = user_id,
-            status = "planning",
+            status = "completed",
             input = task_data.message,
+            output = output_text,
             plan_data = plan_obj.model_dump() if plan_obj else None,  #转成字典存JSON
-            current_step_index = 0
+            current_step_index = len(plan_obj.steps) if plan_obj else 0
         )
 
         db.add(new_task)
@@ -75,6 +88,7 @@ class TaskService:
             select(Task).where(Task.id == task_id, Task.user_id == user_id)
         )
         return result.scalar_one_or_none()
+        #返回任务ID和用户ID查询单个任务，如果不存在就返回None
 
     @staticmethod
     async def list_tasks(db: AsyncSession, skip: int=0, limit: int = 100, user_id: str="default_user"):

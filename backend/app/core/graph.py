@@ -9,6 +9,7 @@ from .state import AgentState
 from .llm import get_llm
 from ..core.config import settings
 from .planner import planner_node
+from .research import research_node
 
 logger = logging.getLogger(__name__)
 #初始化LLM(复用单例)
@@ -46,12 +47,27 @@ async def agent_node(state: AgentState) -> dict:
     return {"messages": [response]}
 
 #节点二：路由决策
-def should_continue(state: AgentState) -> Literal["agent_node", END]:
+def should_continue(state: AgentState) -> Literal["research", END]:
     """
     条件边：决定下一步去哪里
-    今天只有Agent一个节点，永远走END
+    条件路由：如果还有Research步骤未执行，继续走research 节点;
+    否则结束。
     """
-    return END
+    plan = state.get("plan")
+    if not plan:
+        return END
+
+    current_idx = state.get("current_step_index", 0)
+    steps = plan.steps
+
+    if current_idx >= len(steps):
+        return END
+
+    current_step = steps[current_idx]
+    if current_step.agent_type == "research":
+        return "research"
+    else:
+        return END
 
 #构建图
 def build_agent_graph():
@@ -60,8 +76,19 @@ def build_agent_graph():
     #2.添加节点
     #workflow.add_node("agent",agent_node)#"agent"是这个节点名称
     workflow.add_node("planner", planner_node)
+    workflow.add_node("research", research_node)
     workflow.add_edge(START, "planner")
-    workflow.add_edge("planner", END)
+    workflow.add_edge("planner", "research")
+
+    #条件边：research执行完后，决定是继续下一个research 还是结束
+    workflow.add_conditional_edges(
+        "research",
+        should_continue,
+        {
+            "research": "research",  #如果还有研究步骤，循环
+            END: END   #否则结束
+        }
+    )
 
     #3.添加边
     """

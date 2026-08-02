@@ -32,6 +32,10 @@ services:
     #把容器内部的端口映射到宿主机
     env_file:
       - .env
+    environment:
+      - HTTP_PROXY=http://host.docker.internal:33210
+      - HTTPS_PROXY=http://host.docker.internal:33210
+      - NO_PROXY=postgres,redis,api.deepseek.com,localhost,127.0.0.1
     volumes:
       - ./backend/app:/app/app  #挂载本地代码，改完就生效（不用rebuild）
       #挂载之后，本地修改代码保存之后直接通过“管道”同步进容器内部，加上--reload参数，Uvicorn检测到文件夹变了，瞬间自动重启服务，刷新浏览器就能看到效果
