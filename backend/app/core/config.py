@@ -5,6 +5,7 @@ class Settings(BaseSettings):
     env: str="dev"
     database_url: str  #从这个环境变量读取
     redis_url: str
+    upload_dir: str = "./uploads"
 
     deepseek_api_key: str
     deepseek_base_url: str = "https://api.deepseek.com/v1"

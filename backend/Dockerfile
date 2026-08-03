@@ -4,6 +4,8 @@ FROM python:3.11-slim
 WORKDIR /app
 #设置容器内的工作目录，后续的COPY和RUN命令都会默认在这个目录下执行。相当于容器里的 cd /app
 
+RUN mkdir -p /app/uploads
+
 #只复制依赖文件（利用Docker缓冲层，不改依赖就不用重装）
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

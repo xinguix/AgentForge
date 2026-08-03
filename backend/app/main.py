@@ -5,7 +5,7 @@ from .core.config import settings
 from .core.database import engine, Base
 from .core.graph import get_graph
 from .models import *
-from .api.v1 import agents, chat, tasks
+from .api.v1 import agents, chat, tasks, documents
 
 #配置日志（PyCharm底部的Run窗口会显示这些彩色日志）
 logging.basicConfig(level=logging.INFO,format='%(asctime)s - %(levelname)s - %(message)s')
@@ -34,6 +34,8 @@ app = FastAPI(title=settings.project_name,lifespan=lifespan)
 app.include_router(agents.router, prefix="/api/v1")
 app.include_router(chat.router, prefix="/api/v1")
 app.include_router(tasks.router,prefix="/api/v1")
+
+app.include_router(documents.router, prefix="/api/v1")
 
 @app.get("/health")
 async def health_check():
