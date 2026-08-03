@@ -7,6 +7,7 @@ from typing import Literal
 from .reviewer import review_node
 from .state import AgentState
 from .llm import get_llm
+from .writer import writer_node
 from ..core.config import settings
 from .planner import planner_node
 from .research import research_node
@@ -48,7 +49,7 @@ async def agent_node(state: AgentState) -> dict:
     return {"messages": [response]}
 
 #节点二：路由决策
-def should_continue(state: AgentState) -> Literal["research", "reviewer"]:
+def should_continue(state: AgentState) -> Literal["research", "reviewer", "writer", END]:
     """
     条件边：决定下一步去哪里
     条件路由：如果还有Research步骤未执行，继续走research 节点;
@@ -62,33 +63,36 @@ def should_continue(state: AgentState) -> Literal["research", "reviewer"]:
     steps = plan.steps
 
     if current_idx >= len(steps):
-        return END
+        return "writer"
 
     current_step = steps[current_idx]
+
     if current_step.agent_type == "research":
         retry_count = state.get("retry_count", 0)
         if retry_count >= MAX_RETRIES:
-            return END
+            return "writer"
         return "research"
     elif current_step.agent_type == "reviewer":
         return "reviewer"
     else:
-        return END
+        return "research"
 
-def route_after_reviewer(state: AgentState) -> Literal["research", END]:
+def route_after_reviewer(state: AgentState) -> Literal["research", "writer"]:
     """
-    Reviewer: 执行后的条件边：通过则结束，不通过则回到research 重试
+    Reviewer: 执行后的条件边：通过则进入writer(生成报告)，不通过则回到research 重试
     """
     status = state.get("review_status", "pass")
     retry_count = state.get("retry_count", 0)
 
-    if status in ["fail", "retry"] and retry_count < MAX_RETRIES:
+    if status == "pass":
         #需要重试，回到research节点
         #注意：current_step_index不变，所以会执行同一个步骤
         return "research"
+    elif retry_count < MAX_RETRIES:
+        return "research"
     else:
-        #通过，或者重试次数用尽，结束
-        return END
+        #通过，或者重试次数用尽，进入writer
+        return "writer"
 
 #构建图
 def build_agent_graph():
@@ -99,6 +103,7 @@ def build_agent_graph():
     workflow.add_node("planner", planner_node)
     workflow.add_node("research", research_node)
     workflow.add_node("reviewer", review_node)
+    workflow.add_node("writer", writer_node)
 
     workflow.add_edge(START, "planner")
     workflow.add_edge("planner", "research")
@@ -111,6 +116,7 @@ def build_agent_graph():
             "research": "research",
             #如果还有研究步骤，循环
             "reviewer": "reviewer",
+            "writer": "writer",
             END: END   #否则结束
         }
     )
@@ -121,9 +127,11 @@ def build_agent_graph():
         route_after_reviewer,
         {
             "research": "research", #重试
-            END: END   #通过
+            "writer": "writer"  #通过后进入Write
         }
     )
+
+    workflow.add_edge("writer", END)
 
     #3.添加边
     """

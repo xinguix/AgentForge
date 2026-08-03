@@ -55,9 +55,9 @@ async def review_node(state: AgentState) -> dict:
 
     #4.如果搜索结果是错误信息，直接判fail(防御性编程)
     if "搜索失败" in research_summary or "无搜索结果" in research_summary:
-        return {"review_status": "fail", "retry_count": state.get("retry_count", 0) + 1}
+        return {"review_status": "fail", "retry_count": state.get("retry_count", 0) + 1, "current_step_index": current_idx-1}
     elif len(research_summary.strip()) < 50:
-        return {"review_status": "retry", "retry_count": state.get("retry_count", 0) + 1}
+        return {"review_status": "retry", "retry_count": state.get("retry_count", 0) + 1,"current_step_index": current_idx-1}
 
     #5.调用LLM进行智能审查（结构化判断）
     prompt = REVIEWER_PROMPT.format(
@@ -79,6 +79,7 @@ async def review_node(state: AgentState) -> dict:
 
     return {
         "review_status": review_status,
-        "retry_count": state.get("retry_count", 0) + 1 if review_status == "retry" else state.get("retry_count", 0)
+        "retry_count": state.get("retry_count", 0) + 1 if review_status in ("fail", "retry") else 0,
+        "current_step_index": current_idx - 1 if review_status in ("fail", "retry") else current_idx
         #三元表达式： 结果A if 条件 else 结果B。条件成立返回结果A,不满足返回B
     }

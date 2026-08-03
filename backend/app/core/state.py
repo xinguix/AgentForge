@@ -17,7 +17,7 @@ class AgentState(TypedDict):
     task_id: Optional[str]
 
     #中间思考过程
-    intermediate_steps: Optional[List[Dict[str, Any]]]
+    intermediate_steps: Annotated[Optional[List[Dict[str, Any]]], operator.add]
 
     #当前执行计划（整个plan对象）
     plan: Optional[Plan]
@@ -31,3 +31,6 @@ class AgentState(TypedDict):
 
     #当前步骤的重试次数（防止无限循环）
     retry_count: int
+
+    #最终答案（Writer节点写入，供前端展示）
+    final_answer: Optional[str]

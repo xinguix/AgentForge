@@ -54,19 +54,35 @@ class TaskService:
         graph = get_graph()
         final_state = await graph.ainvoke(initial_state)
 
-        review_status = final_state.get("review_status", "unknown")
-        intermediate = final_state.get("intermediate_steps", [])
-
         plan_obj = final_state.get("plan")
+        #安全的plan数据处理块
+        if plan_obj:
+            #1.安全提取plan_data(兼容pydantic模型和字典)
+            if hasattr(plan_obj, "model_dump"):
+                plan_data = plan_obj.model_dump()
+            elif isinstance(plan_obj, dict):
+                plan_data = plan_obj
+            else:
+                plan_data = None
 
-        #4.整理搜索结果（写入output字段，方便前端展示）
-        output_text = f"任务执行完成。审查结果：{review_status}\n"
-        output_text += "=" * 40 + "\n"
-        for idx, step in enumerate(intermediate):
-            if "search_result" in step:
-                output_text += f"步骤 {step['step_id']} - {step['step_description']}:\n"
-                output_text += f"{step['search_result'][:300]}...\n\n"
-                #把step_id 、描述、搜索结果（截取前200字符）拼接到output_text中，用于前端展示
+            #安全提取步骤数量
+            if hasattr(plan_obj, "steps"):
+                step_count = len(plan_obj.steps)
+            elif isinstance(plan_obj, dict) and "steps" in plan_obj:
+                step_count = 0
+        else:
+            plan_data = None
+            step_count = 0
+
+        final_answer = final_state.get("final_answer", "")
+
+        if not final_answer:
+            intermediate = final_state.get("intermediate_steps", [])
+            fallback = "【系统生成】\n"
+            for step in intermediate:
+                if "search_result" in step:
+                    fallback += f"- {step.get('step_description', '')}: {step['search_result'][:200]}...\n"
+            final_answer = fallback or "系统未能生成有效回答。"
 
         #3.创建Task记录
         new_task = Task(
@@ -74,9 +90,9 @@ class TaskService:
             user_id = user_id,
             status = "completed",
             input = task_data.message,
-            output = output_text,
-            plan_data = plan_obj.model_dump() if plan_obj else None,  #转成字典存JSON
-            current_step_index = len(plan_obj.steps) if plan_obj else 0
+            output = final_answer,
+            plan_data = plan_data,  #转成字典存JSON
+            current_step_index = step_count
         )
 
         db.add(new_task)
