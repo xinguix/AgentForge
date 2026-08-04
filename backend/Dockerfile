@@ -8,7 +8,7 @@ RUN mkdir -p /app/uploads
 
 #只复制依赖文件（利用Docker缓冲层，不改依赖就不用重装）
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 #cache(缓存)  --no-cache-die : 装完立刻删掉安装包，为的是减小最终镜像体积
 #分层缓存：好处在于只要没加新库，这层就不变，docker直接拿缓存的“已安装依赖层”用，然后才复制代码变动
 

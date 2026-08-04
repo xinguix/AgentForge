@@ -94,11 +94,11 @@ class VectorService:
             top_k: int = 3
     ) -> List[str]:
         """向量检索： 根据用户问题，在知识库中查找最相关的文档片段"""
-        #1.将用户问题向量化
+        # 1.将用户问题向量化
         model = get_embedding_model()
         query_embeddings = model.encode([query], convert_to_numpy=True)[0].tolist()
 
-        #2.执行pgvector 的余弦相似度搜索
+        # 2.执行pgvector 的余弦相似度搜索
         # 使用<->操作符（余弦距离）
         stmt = select(DocumentChunk).where(
             DocumentChunk.user_id == user_id,

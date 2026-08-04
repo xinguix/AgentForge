@@ -36,6 +36,17 @@ async def get_task(
         raise HTTPException(status_code=404, detail="任务不存在")
     return task
 
+@router.get("/{task_id}/status")
+async def get_task_status(
+        task_id: str,
+        db: AsyncSession = Depends(get_db)
+):
+    """快速获取任务状态（不返回完整详情，省流量）"""
+    task = await TaskService.get_task_by_id(db, task_id, FIXED_USER_ID)
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    return {"id": task.id, "status": task.status.value}
+
 @router.get("/", response_model=List[TaskResponse])
 async def List_tasks(
         skip: int = 0,

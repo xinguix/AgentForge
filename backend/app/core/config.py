@@ -4,7 +4,7 @@ class Settings(BaseSettings):
     project_name: str="AgentForge"
     env: str="dev"
     database_url: str  #从这个环境变量读取
-    redis_url: str
+    redis_url: str = "redis://redis:6379"
     upload_dir: str = "./uploads"
 
     deepseek_api_key: str

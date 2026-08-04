@@ -1,3 +1,6 @@
+import json
+import traceback
+
 from langchain_core.messages import HumanMessage, SystemMessage
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -5,8 +8,9 @@ from typing import Optional
 import uuid
 
 from ..core.planner import planner_node
+from ..core.redis_client import get_redis
 from ..core.state import AgentState
-from ..models.task import Task
+from ..models.task import Task, TaskStatus
 from ..schemas.task import TaskCreate
 from ..core.graph import get_graph
 
@@ -18,24 +22,22 @@ class TaskService:
             task_data: TaskCreate,
             user_id: str = "default_user"
     ) -> Task:
-        """
-        :param db: 调用planner生成计划
-        :param task_data: 存入数据库
-        :return: Task对象
-        """
-        #0.去重：调用planner前，先看这个用户是不是已经有了相同的input还在planning的任务
-        existing = await db.execute(
-            select(Task).where(
-                Task.user_id == user_id,
-                Task.input == task_data.message,
-                Task.status == "planning",
-            )
+        #1.创建Task记录,状态为CREATED
+        new_task = Task(
+            id = str(uuid.uuid4()),
+            user_id = user_id,
+            status = TaskStatus.CREATED,
+            input = task_data.message
         )
-        existing_task = existing.scalars().first()
-        if existing_task is not None:
-            return existing_task
+        db.add(new_task)
+        await db.commit()
+        await db.refresh(new_task)
 
-        #1.构造Planner需要的state
+        #2.更新状态为PLANNING(还没跑图，先占位)
+        new_task.status = TaskStatus.PLANNING
+        await db.commit()
+
+        #3.构造初始状态
         messages = []
         if task_data.system_prompt:
             messages.append(SystemMessage(content=task_data.system_prompt))
@@ -43,64 +45,79 @@ class TaskService:
 
         initial_state = AgentState(
             messages = messages,
-            task_id = None,
+            task_id = new_task.id,
             intermediate_steps=[],
             plan = None,
-            current_step_index = 0
+            current_step_index = 0,
+            review_status=None,
+            retry_count=0
         )
 
-        #2.调用Planner节点
-        #注意：planner_node返回的是（“plan”: plan, "current_step_index": 0）
-        graph = get_graph()
-        final_state = await graph.ainvoke(
-            initial_state,
-            config = {"configurable": {"db": db}}
-        )
+        #4.把初始状态存入Redis(key: task:{id}:state)
+        try:
+            redis_client = await get_redis()
+            #状态快照
+            state_snapshot = {
+                "task_id": new_task.id,
+                "current_step_index": 0,
+                "retry_count": 0,
+                "messages_count": len(messages),
+            }
+            await redis_client.setex(
+            #setex: Redis命令，意为SET with EXpiration(设置值并同时指定过期时间)
+                f"task:{new_task.id}:state",
+                3600, #一小时过期
+                json.dumps(state_snapshot)#将字典转化为JSON字符串在存入redis(redis只能存文本后二进制)
+            )
+        except Exception as e:
+            print(f"Redis 存储失败：{e}")
 
-        plan_obj = final_state.get("plan")
-        #安全的plan数据处理块
-        if plan_obj:
-            #1.安全提取plan_data(兼容pydantic模型和字典)
-            if hasattr(plan_obj, "model_dump"):
-                plan_data = plan_obj.model_dump()
-            elif isinstance(plan_obj, dict):
-                plan_data = plan_obj
-            else:
-                plan_data = None
-
-            #安全提取步骤数量
-            if hasattr(plan_obj, "steps"):
-                step_count = len(plan_obj.steps)
-            elif isinstance(plan_obj, dict) and "steps" in plan_obj:
-                step_count = 0
-        else:
-            plan_data = None
-            step_count = 0
-
-        final_answer = final_state.get("final_answer", "")
-
-        if not final_answer:
-            intermediate = final_state.get("intermediate_steps", [])
-            fallback = "【系统生成】\n"
-            for step in intermediate:
-                if "search_result" in step:
-                    fallback += f"- {step.get('step_description', '')}: {step['search_result'][:200]}...\n"
-            final_answer = fallback or "系统未能生成有效回答。"
-
-        #3.创建Task记录
-        new_task = Task(
-            id = str(uuid.uuid4()),
-            user_id = user_id,
-            status = "completed",
-            input = task_data.message,
-            output = final_answer,
-            plan_data = plan_data,  #转成字典存JSON
-            current_step_index = step_count
-        )
-
-        db.add(new_task)
+        #5. 更新状态为RUNNING
+        new_task.status = TaskStatus.RUNNING
         await db.commit()
-        await db.refresh(new_task)
+
+        #6.调用langgraph
+        try:
+            graph = get_graph()
+            final_state = await graph.ainvoke(initial_state)
+
+            #提取结果
+            plan_obj = final_state.get("plan")
+        #安全的plan数据处理块
+            final_answer = final_state.get("final_answer", "")
+            intermediate = final_state.get("intermediate_steps", [])
+
+            if not final_answer:
+                fallback = "【系统生成】\n"
+                for step in intermediate:
+                    if "search_result" in step:
+                        fallback += f"- {step.get('step_description', '')}: {step['search_result'][:200]}...\n"
+                final_answer = fallback or "系统未能生成有效回答。"
+
+            new_task.status = TaskStatus.COMPLETED
+            new_task.output = final_answer
+            new_task.plan_data = plan_obj.model_dump() if plan_obj else None
+            new_task.current_step_index = len(plan_obj.steps) if plan_obj else 0
+
+            await db.commit()
+            await db.refresh(new_task)
+
+        except Exception as e:
+            new_task.status = TaskStatus.FAILED
+            new_task.error = traceback.format_exc()[:500]
+            await db.commit()
+            await db.refresh(new_task)
+            raise
+
+        #无论成功与否都要跑finally
+        finally:
+            #7.清理Redis缓存（任务结束）
+            try:
+                redis_client = await get_redis()
+                await redis_client.delete(f"task:{new_task.id}:state")
+            except:
+                pass
+
         return new_task
 
     @staticmethod

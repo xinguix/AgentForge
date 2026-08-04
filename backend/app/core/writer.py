@@ -44,9 +44,24 @@ async def writer_node(state: AgentState) -> dict:
     valid_results = [s for s in intermediate if s.get("search_result")]
 
     if not intermediate or len(valid_results) < 2:
-        #如果没有研究成果，直接生成一个占位回答
-        fallback_answer = "抱歉，由于未能获取到足够的研究资料，暂时无法生成完整报告。请检查搜索配置或稍后重试。"
-        return {"final_answer": fallback_answer}
+        #分支1： 先看plan里面有没有research步骤
+        plan = state.get("plan")
+        has_research_step = False
+        if plan and plan.steps:
+            has_research_step = any(
+                step.agent_type == "research" for step in plan.steps
+            )
+        if not has_research_step:
+            #简单问题：预期不搜索，这里直接调用大模型回答
+            response = await llm.ainvoke([
+                SystemMessage(content="你是一个知识渊博的AI助手，请直接、准确、简洁地回答用户的问题。"),
+                HumanMessage(content=user_query)
+            ])
+            return {"final_answer": response.content.strip()}
+        else:
+            #复杂问题但是搜索失败：如实告知，不硬答、不浪费token
+            fallback_answer = "抱歉，由于未能获取到足够的研究资料，暂时无法生成完整报告。请检查搜索配置或稍后重试。"
+            return {"final_answer": fallback_answer}
 
     #3.格式化研究素材（让LLM容易理解）
     research_materials = ""
