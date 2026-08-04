@@ -1,14 +1,18 @@
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from .state import AgentState
+from ..services.vector_service import VectorService
 from ..tools.search_tool import web_search
 from ..schemas.plan import PlanStep
 import json
 
-async def research_node(state: AgentState) -> dict:
+async def research_node(state: AgentState, config: dict) -> dict:
     """
     Research Agent:执行当前步骤的搜索任务
     :return: intermediate_steps 追加一条搜索记录，current_step_index推进1
     """
+    db = config.get("configurable", {}).get("db")
     #读取当前计划
     plan = state.get("plan")
     if not plan:
@@ -33,12 +37,7 @@ async def research_node(state: AgentState) -> dict:
     query = current_step.description
     print(f"Research Agent 正在搜索: {query}")
 
-    if "天气" in query:
-        search_result = "今天天气晴朗，适合户外活动"
-        print("天气关键词命中，使用模拟结果（降级策略）")
-    else:
-        search_result = await web_search(query, max_results=3)
-
+    search_result = await hybrid_search(query, db)
     #格式化结果为结构化记录（方便Trace 可视化）
     step_record = {
         "step_id": current_step.step_id,
@@ -51,3 +50,41 @@ async def research_node(state: AgentState) -> dict:
         "intermediate_steps": [step_record],
         "current_step_index": current_idx + 1
     }
+
+async def hybrid_search(query: str, db: AsyncSession, user_id: str="default") -> str:
+    """
+    混合检索：根据query内容决定检索策略，返回整合后的文本摘要
+    """
+    #internal:内部的
+    internal_keywords = ["内部", "公司", "文档", "资料", "文件", "根据", "参考"]
+
+    #1.判断是否需要内部检索
+    need_internal = any(kw in query for kw in internal_keywords)
+
+    #2.并行执行检索
+    results = []
+    if need_internal:
+        #只做内部检查（如果明确指定了内部，就不做联网，更精准）
+        internal_chunks = await VectorService.search_similar(db, query, user_id, top_k=3)
+        if internal_chunks:
+            results.append("【内部知识库】")
+            results.extend(f"- {chunk}" for chunk in internal_chunks)
+    else:
+        #通用问题：同时执行联网+内部检索，互为补充
+        #注意：并发执行，节省时间
+        import asyncio
+        web_task = web_search(query, max_results=2)
+        internal_task = VectorService.search_similar(db, query, user_id, top_k=2)
+        web_result, internal_chunks = await asyncio.gather(web_task, internal_task)
+
+        if web_result and not web_result.startswith("搜索失败"):
+            results.append("【互联网搜索结果】")
+            results.append(web_result)
+        if internal_chunks:
+            results.append("【企业内部知识库】")
+            results.extend(f"- {chunk}" for chunk in internal_chunks)
+
+    if not results:
+        return "未找到相关信息，请检查网络或上传更多文档。"
+
+    return "\n\n".join(results)

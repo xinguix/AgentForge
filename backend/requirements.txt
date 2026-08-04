@@ -20,3 +20,14 @@ markdown==3.6
 beautifulsoup4==4.13.5
 python-multipart==0.0.20
 python-docx==1.1.2
+
+# 向量数据库驱动
+pgvector==0.3.1
+
+# 文本分块
+langchain-text-splitters==0.3.0
+
+# 本地 Embedding 模型（BGE 系列）
+sentence-transformers==3.0.1
+
+# （可选，用于优化）torch 在基础镜像里可能没有，但 sentence-transformers 会依赖，我们让 pip 自动安装 CPU 版

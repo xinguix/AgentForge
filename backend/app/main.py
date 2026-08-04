@@ -1,6 +1,8 @@
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from sqlalchemy import text
+
 from .core.config import settings
 from .core.database import engine, Base
 from .core.graph import get_graph
@@ -17,6 +19,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     #启动前1.新建一个数据库
     async with engine.begin() as conn:
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         await conn.run_sync(Base.metadata.create_all)
     logger.info(f"{settings.project_name}数据库检查/创建完成")
     #2.提前编译Langgraph(预热)

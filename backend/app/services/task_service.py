@@ -52,7 +52,10 @@ class TaskService:
         #2.调用Planner节点
         #注意：planner_node返回的是（“plan”: plan, "current_step_index": 0）
         graph = get_graph()
-        final_state = await graph.ainvoke(initial_state)
+        final_state = await graph.ainvoke(
+            initial_state,
+            config = {"configurable": {"db": db}}
+        )
 
         plan_obj = final_state.get("plan")
         #安全的plan数据处理块

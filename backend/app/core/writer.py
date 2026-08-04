@@ -2,6 +2,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from .llm import get_llm
 from .state import AgentState
 import json
+from datetime import datetime
 
 llm = get_llm()
 
@@ -20,6 +21,7 @@ WRITER_PROMPT = """
 3. 如果素材不足，请明确指出“基于现有资料，以下信息尚不完整”，而不是胡编乱造。
 4. 在引用具体数据或案例时，注明来源（如“根据搜索结果显示”）
 5. 如果研究素材不足（少于 2 个有效搜索结果），不要强行编造，而是直接回复：‘抱歉，目前公开资料有限，无法生成完整的分析报告。建议您提供更多具体方向或开放相关数据权限。
+6. 今天是{current_date},报告日期请使用今天。
 
 请直接输出 Markdown 格式的报告，不要有任何额外的开场白或结束语。
 """
@@ -38,7 +40,10 @@ async def writer_node(state: AgentState) -> dict:
 
     #2.提取所有研究步骤的中间结果
     intermediate = state.get("intermediate_steps", [])
-    if not intermediate:
+    #筛选出真正有搜索结果的step
+    valid_results = [s for s in intermediate if s.get("search_result")]
+
+    if not intermediate or len(valid_results) < 2:
         #如果没有研究成果，直接生成一个占位回答
         fallback_answer = "抱歉，由于未能获取到足够的研究资料，暂时无法生成完整报告。请检查搜索配置或稍后重试。"
         return {"final_answer": fallback_answer}
@@ -51,10 +56,12 @@ async def writer_node(state: AgentState) -> dict:
             result = step.get("search_result", "无结果")
             research_materials += f"### 研究项{idx+1}:{step_desc}\n{result}\n\n"
 
-    #4.调用LLM生成报告
+    # 4.调用LLM生成报告
+    current_date = datetime.now().strftime("%Y-%m-%d")
     prompt = WRITER_PROMPT.format(
         user_query=user_query,
-        research_materials=research_materials[:3000]  #截断防止超token
+        research_materials=research_materials[:3000],
+        current_date=current_date
     )
 
     response = await llm.ainvoke([HumanMessage(content=prompt)])
