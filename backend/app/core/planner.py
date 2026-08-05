@@ -10,7 +10,7 @@ llm = get_llm()
 
 #1.创建结构化输出链
 #with_structured_output 会强制LLM返回Plan类型的Json
-structured_llm = llm.with_structured_output(Plan)
+structured_llm = llm.with_structured_output(Plan, method="function_calling")
 
 #2.设计提示词
 PLANNER_PROMPT = """

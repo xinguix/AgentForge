@@ -19,7 +19,7 @@ class ChatService:
         """处理用户消息，返回AI回答和token信息"""
 
         #1.获取编译好的图
-        graph = get_graph()
+        graph = await get_graph()
 
 
         #2.构造输入状态（LangGraph的初始状态）

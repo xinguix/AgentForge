@@ -1,4 +1,5 @@
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
+from langchain_core.runnables import RunnableConfig
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .state import AgentState
@@ -7,7 +8,7 @@ from ..tools.search_tool import web_search
 from ..schemas.plan import PlanStep
 import json
 
-async def research_node(state: AgentState, config: dict) -> dict:
+async def research_node(state: AgentState, config: RunnableConfig) -> dict:
     """
     Research Agent:执行当前步骤的搜索任务
     :return: intermediate_steps 追加一条搜索记录，current_step_index推进1

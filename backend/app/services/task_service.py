@@ -78,8 +78,8 @@ class TaskService:
 
         #6.调用langgraph
         try:
-            graph = get_graph()
-            final_state = await graph.ainvoke(initial_state)
+            graph = await get_graph()
+            final_state = await graph.ainvoke(initial_state, config={"configurable": {"thread_id": new_task.id, "db":db}})
 
             #提取结果
             plan_obj = final_state.get("plan")
@@ -140,3 +140,45 @@ class TaskService:
             .limit(limit)
         )
         return result.scalars().all()
+
+    @staticmethod
+    async def resume_task(db: AsyncSession, task_id: str, user_id: str="default_user") -> Task:
+        """从CHeckpoint恢复任务（断点续跑）"""
+        #检查任务是否存在并且状态为FAILED
+        task = await TaskService.get_task_by_id(db, task_id, user_id)
+        if not task:
+            raise ValueError("任务不存在")
+
+        if task.status != TaskStatus.FAILED:
+            raise ValueError("只有失败的任务才能恢复")
+
+        #2.更新状态为RUNNING
+        task.status = TaskStatus.RUNNING
+        await db.commit()
+
+        #3.获取编译好的图
+        graph = await get_graph()
+
+        #4.在同一个thread_id(task_id)重新调用，LangGraph会自动从最近的checkpointer恢复
+        try:
+            #注意：这里需要重建初始状态（但图会从checkpoint 恢复，不是从头跑）
+            #我们传入一个空状态，只带thread_id
+            final_state = await graph.ainvoke(
+                {},
+                config={"configurable": {"thread_id": task_id, "db":db}},
+            )
+
+            #5.提取结果并更新Task
+            final_answer = final_state.get("final_answer", "")
+            plan_obj = final_state.get("plan")
+
+            task.status = TaskStatus.COMPLETED
+            task.output = final_answer
+            task.plan_data = plan_obj.model_dump() if plan_obj else None
+            await db.commit()
+            await db.refresh(task)
+
+        except Exception as e:
+            task.error = traceback.format_exc()[:500]
+            await db.commit()
+            raise

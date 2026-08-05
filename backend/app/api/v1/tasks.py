@@ -56,3 +56,18 @@ async def List_tasks(
     """获取任务列表（分页）"""
     tasks = await TaskService.list_tasks(db, skip, limit, FIXED_USER_ID)
     return tasks
+
+@router.post("/{task_id}/resume", response_model=TaskResponse)
+async def resume_task(
+        #resume:恢复
+        task_id: str,
+        db: AsyncSession = Depends(get_db)
+):
+    """恢复失败的任务（从checkpoint 续跑）"""
+    try:
+        task = await TaskService.resume_task(db, task_id, FIXED_USER_ID)
+        return task
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"恢复失败：{str(e)}")

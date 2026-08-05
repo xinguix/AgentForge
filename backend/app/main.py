@@ -6,7 +6,7 @@ from sqlalchemy import text
 from .core.config import settings
 from .core.database import engine, Base
 from .core.redis_client import get_redis, close_redis
-from .core.graph import get_graph
+from .core.graph import get_graph, get_postgres_checkpointer
 from .models import *
 from .api.v1 import agents, chat, tasks, documents
 
@@ -33,8 +33,15 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Redis连接失败：{e}")
 
+    #初始化Postgres Checkpointer
+    try:
+        checkpointer = await get_postgres_checkpointer()
+        logger.info("Postgres Checkpointer就绪")
+    except Exception as e:
+        logger.error(f"Checkpointer初始化失败:{e}")
+
     logging.info("正在编译LangGraph工作流...")
-    graph = get_graph()
+    graph = await get_graph()
     logging.info(f"LangGraph编译完成，节点数:{len(graph.nodes)}")
 
     yield  #服务开始运行

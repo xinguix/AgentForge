@@ -1,5 +1,7 @@
 import logging
-
+from tabnanny import check
+from psycopg_pool import AsyncConnectionPool
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langchain_core.messages import HumanMessage, AIMessage ,SystemMessage
 from langgraph.graph import StateGraph, START, END
 from typing import Literal
@@ -16,6 +18,20 @@ logger = logging.getLogger(__name__)
 #初始化LLM(复用单例)
 llm = get_llm()
 MAX_RETRIES = 2
+_checkpointer = None
+
+async def get_postgres_checkpointer():
+    """获取Postgres checkpointer单例(持久化到数据库)"""
+    global _checkpointer
+    if _checkpointer is None:
+        pool = AsyncConnectionPool(
+            settings.database_url.replace("postgresql+asyncpg://", "postgresql://")
+        )
+        await pool.open()
+        _checkpointer = AsyncPostgresSaver(pool)
+        await _checkpointer.setup()
+    return _checkpointer
+
 
 #1.节点1：Agent调用
 async def agent_node(state: AgentState) -> dict:
@@ -95,7 +111,7 @@ def route_after_reviewer(state: AgentState) -> Literal["research", "writer"]:
         return "writer"
 
 #构建图
-def build_agent_graph():
+def build_agent_graph(checkpointer):
     #1.创建状态图（指定状态类型）
     workflow = StateGraph(AgentState)
     #2.添加节点
@@ -144,16 +160,17 @@ def build_agent_graph():
         }
     )"""
 
-    #4.编译（编译后才能invole）
-    graph = workflow.compile()
+    #4.编译（编译时传入checkpointer）
+    graph = workflow.compile(checkpointer=checkpointer)
     return graph
 
 #全局单例图（启动时编译一次，和LLM一样复用）
 _compiled_graph = None
 
-def get_graph():
+async def get_graph():
     """获取编译好的图（单例）"""
     global _compiled_graph
     if _compiled_graph is None:
-        _compiled_graph = build_agent_graph()
+        checkpointer = await get_postgres_checkpointer()
+        _compiled_graph = build_agent_graph(checkpointer)
     return _compiled_graph
