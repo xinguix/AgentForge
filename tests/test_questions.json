@@ -1,0 +1,124 @@
+{
+  "test_cases": [
+    {
+      "id": "TC-01",
+      "category": "simple",
+      "question": "什么是人工智能？",
+      "expected_keywords": ["人工智能", "AI", "机器", "智能"]
+    },
+    {
+      "id": "TC-02",
+      "category": "simple",
+      "question": "今天天气怎么样？",
+      "expected_keywords": ["天气", "温度", "晴", "雨"]
+    },
+    {
+      "id": "TC-03",
+      "category": "complex",
+      "question": "分析新能源汽车行业的发展现状和未来趋势",
+      "expected_keywords": ["新能源", "汽车", "电动", "电池", "趋势"]
+    },
+    {
+      "id": "TC-04",
+      "category": "complex",
+      "question": "人工智能在医疗领域有哪些应用？列出主要方向",
+      "expected_keywords": ["医疗", "诊断", "影像", "AI", "辅助"]
+    },
+    {
+      "id": "TC-05",
+      "category": "complex",
+      "question": "区块链技术如何应用于供应链管理？",
+      "expected_keywords": ["区块", "供应链", "溯源", "透明", "信任"]
+    },
+    {
+      "id": "TC-06",
+      "category": "complex",
+      "question": "2024年全球经济形势分析及对中国的影响",
+      "expected_keywords": ["经济", "全球", "中国", "增长", "通胀"]
+    },
+    {
+      "id": "TC-07",
+      "category": "complex",
+      "question": "量子计算的发展现状和对现有加密体系的冲击",
+      "expected_keywords": ["量子", "计算", "加密", "密码", "安全"]
+    },
+    {
+      "id": "TC-08",
+      "category": "complex",
+      "question": "碳达峰和碳中和背景下，中国传统能源企业如何转型？",
+      "expected_keywords": ["碳达峰", "碳中和", "能源", "转型", "绿色"]
+    },
+    {
+      "id": "TC-09",
+      "category": "complex",
+      "question": "生成式AI对内容创作行业的影响分析",
+      "expected_keywords": ["生成", "AI", "内容", "创作", "影响"]
+    },
+    {
+      "id": "TC-10",
+      "category": "complex",
+      "question": "探讨中国老龄化社会的挑战和应对策略",
+      "expected_keywords": ["老龄化", "养老", "人口", "政策", "医疗"]
+    },
+    {
+      "id": "TC-11",
+      "category": "rag",
+      "question": "根据项目规划文档，第3周的核心目标是什么？",
+      "expected_keywords": ["RAG", "知识", "检索", "向量", "文档"]
+    },
+    {
+      "id": "TC-12",
+      "category": "rag",
+      "question": "项目中使用了几种数据库？分别是什么？",
+      "expected_keywords": ["PostgreSQL", "Redis", "pgvector"]
+    },
+    {
+      "id": "TC-13",
+      "category": "rag",
+      "question": "AgentForge的技术栈有哪些？",
+      "expected_keywords": ["FastAPI", "LangGraph", "Docker", "PostgreSQL"]
+    },
+    {
+      "id": "TC-14",
+      "category": "rag",
+      "question": "项目中为什么选择LangGraph作为工作流引擎？",
+      "expected_keywords": ["状态", "图", "编排", "多智能体"]
+    },
+    {
+      "id": "TC-15",
+      "category": "rag",
+      "question": "可延后完善的功能有哪些？",
+      "expected_keywords": ["Tool", "Registry", "前端", "Benchmark"]
+    },
+    {
+      "id": "TC-16",
+      "category": "rag",
+      "question": "项目中如何保证数据隐私？",
+      "expected_keywords": ["本地", "Embedding", "BGE", "私有"]
+    },
+    {
+      "id": "TC-17",
+      "category": "edge",
+      "question": "你好",
+      "expected_keywords": ["你好", "您好"]
+    },
+    {
+      "id": "TC-18",
+      "category": "edge",
+      "question": "你能做什么？",
+      "expected_keywords": ["助手", "帮助", "回答", "问题"]
+    },
+    {
+      "id": "TC-19",
+      "category": "edge",
+      "question": "给我讲个笑话",
+      "expected_keywords": ["笑", "哈哈", "逗"]
+    },
+    {
+      "id": "TC-20",
+      "category": "edge",
+      "question": "请用中文回答：What is machine learning？",
+      "expected_keywords": ["机器", "学习", "数据", "算法"]
+    }
+  ]
+}

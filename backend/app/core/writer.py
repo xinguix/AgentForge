@@ -1,6 +1,9 @@
 from langchain_core.messages import SystemMessage, HumanMessage
 from .llm import get_llm
 from .state import AgentState
+from ..core.database import AsyncSessionLocal
+from ..services.trace_service import TraceService
+import time
 import json
 from datetime import datetime
 
@@ -26,60 +29,106 @@ WRITER_PROMPT = """
 请直接输出 Markdown 格式的报告，不要有任何额外的开场白或结束语。
 """
 
+
 async def writer_node(state: AgentState) -> dict:
     """
     :param state: 将研究结果整合成最终报告。
     """
-    #1.提取用户问题
+    start_time = time.time()
+    task_id = state.get("task_id", "unknown")
+
+    # 1.提取用户问题
     messages = state.get("messages", [])
-    user_query =""
+    user_query = ""
     for msg in reversed(messages):
         if hasattr(msg, 'type') and msg.type == "human":
             user_query = msg.content
             break
 
-    #2.提取所有研究步骤的中间结果
-    intermediate = state.get("intermediate_steps", [])
-    #筛选出真正有搜索结果的step
-    valid_results = [s for s in intermediate if s.get("search_result")]
+    input_data = {
+        "user_query": user_query[:200],
+        "has_messages": bool(messages)
+    }
 
-    if not intermediate or len(valid_results) < 2:
-        #分支1： 先看plan里面有没有research步骤
-        plan = state.get("plan")
-        has_research_step = False
-        if plan and plan.steps:
-            has_research_step = any(
-                step.agent_type == "research" for step in plan.steps
-            )
-        if not has_research_step:
-            #简单问题：预期不搜索，这里直接调用大模型回答
-            response = await llm.ainvoke([
-                SystemMessage(content="你是一个知识渊博的AI助手，请直接、准确、简洁地回答用户的问题。"),
-                HumanMessage(content=user_query)
-            ])
-            return {"final_answer": response.content.strip()}
+    try:
+        # 2.提取所有研究步骤的中间结果
+        intermediate = state.get("intermediate_steps", [])
+        # 筛选出真正有搜索结果的step
+        valid_results = [s for s in intermediate if s.get("search_result")]
+        input_data["valid_results_count"] = len(valid_results)
+
+        if not intermediate or len(valid_results) < 2:
+            # 分支1： 先看plan里面有没有research步骤
+            plan = state.get("plan")
+            has_research_step = False
+            if plan and plan.steps:
+                has_research_step = any(
+                    step.agent_type == "research" for step in plan.steps
+                )
+
+            if not has_research_step:
+                # 简单问题：预期不搜索，这里直接调用大模型回答
+                response = await llm.ainvoke([
+                    SystemMessage(content="你是一个知识渊博的AI助手，请直接、准确、简洁地回答用户的问题。"),
+                    HumanMessage(content=user_query)
+                ])
+                final_answer = response.content.strip()
+                output_data = {"final_answer_preview": final_answer[:500], "mode": "direct_answer"}
+            else:
+                # 复杂问题但是搜索失败：如实告知，不硬答、不浪费token
+                fallback_answer = "抱歉，由于未能获取到足够的研究资料，暂时无法生成完整报告。请检查搜索配置或稍后重试。"
+                final_answer = fallback_answer
+                output_data = {"final_answer_preview": final_answer[:500], "mode": "fallback"}
         else:
-            #复杂问题但是搜索失败：如实告知，不硬答、不浪费token
-            fallback_answer = "抱歉，由于未能获取到足够的研究资料，暂时无法生成完整报告。请检查搜索配置或稍后重试。"
-            return {"final_answer": fallback_answer}
+            # 3.格式化研究素材（让LLM容易理解）
+            research_materials = ""
+            for idx, step in enumerate(intermediate):
+                if "search_result" in step:
+                    step_desc = step.get("step_description", f"步骤{idx + 1}")
+                    result = step.get("search_result", "无结果")
+                    research_materials += f"### 研究项{idx + 1}:{step_desc}\n{result}\n\n"
 
-    #3.格式化研究素材（让LLM容易理解）
-    research_materials = ""
-    for idx, step in enumerate(intermediate):   #往列表intermediate里面累加结果
-        if "search_result" in step:
-            step_desc = step.get("step_description", f"步骤{idx+1}")  #python下标从0开始的，累加1才能从1开始
-            result = step.get("search_result", "无结果")
-            research_materials += f"### 研究项{idx+1}:{step_desc}\n{result}\n\n"
+            input_data["materials_length"] = len(research_materials)
 
-    # 4.调用LLM生成报告
-    current_date = datetime.now().strftime("%Y-%m-%d")
-    prompt = WRITER_PROMPT.format(
-        user_query=user_query,
-        research_materials=research_materials[:3000],
-        current_date=current_date
-    )
+            # 4.调用LLM生成报告
+            current_date = datetime.now().strftime("%Y-%m-%d")
+            prompt = WRITER_PROMPT.format(
+                user_query=user_query,
+                research_materials=research_materials[:3000],
+                current_date=current_date
+            )
 
-    response = await llm.ainvoke([HumanMessage(content=prompt)])
-    final_answer = response.content.strip()
+            response = await llm.ainvoke([HumanMessage(content=prompt)])
+            final_answer = response.content.strip()
+            output_data = {"final_answer_preview": final_answer[:500], "mode": "report_generation"}
 
-    return {"final_answer": final_answer}
+        # 记录成功轨迹
+        async with AsyncSessionLocal() as db:
+            await TraceService.record_run(
+                db=db,
+                task_id=task_id,
+                node_name="writer",
+                node_type="agent",
+                input_data=input_data,
+                output_data=output_data,
+                latency_ms=(time.time() - start_time) * 1000,
+                token_used=0,  # 暂时占位
+                status="success"
+            )
+
+        return {"final_answer": final_answer}
+
+    except Exception as e:
+        # 记录失败轨迹
+        async with AsyncSessionLocal() as db:
+            await TraceService.record_run(
+                db=db,
+                task_id=task_id,
+                node_name="writer",
+                node_type="agent",
+                input_data=input_data,
+                latency_ms=(time.time() - start_time) * 1000,
+                status="error",
+                error=str(e)
+            )
+        raise

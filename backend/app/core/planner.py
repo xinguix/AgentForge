@@ -4,6 +4,9 @@ from langchain_core.prompts import ChatPromptTemplate
 from .llm import get_llm
 from .state import AgentState
 from ..schemas.plan import Plan
+from ..core.database import AsyncSessionLocal
+from ..services.trace_service import TraceService
+import time
 
 #获取LLM（复用单例）
 llm = get_llm()
@@ -33,6 +36,8 @@ async def planner_node(state: AgentState) -> dict:
     """
     Planner节点：根据用户输入生成任务计划。
     """
+    start_time = time.time()
+    task_id = state.get("task_id", "unknown")
     #1.从状态中提取用户消息（取最后一条HumanMessage）
     messages = state.get("messages", [])
     user_query = ""
@@ -41,21 +46,59 @@ async def planner_node(state: AgentState) -> dict:
             user_query = msg.content
             break
 
-    if not user_query:
-        #防御性编程：如果没有用户消息，抛出异常或返回默认计划
-        return {"plan": Plan(steps=[], rationale="No user query provided")}
+    input_data = {"user_query": user_query[:200]}
 
-    prompt = ChatPromptTemplate.from_messages([
-        #ChatPromptTemplate:用于生成messages的模版
-        ("system", PLANNER_PROMPT),
-        ("user", "{question}")
-    ])
+    try:
+        if not user_query:
+            #防御性编程：如果没有用户消息，抛出异常或返回默认计划
+            plan = Plan(steps=[], rationale="No user query provided")
 
-    chain =prompt | structured_llm
-    plan = await chain.ainvoke({"question": user_query})
+        else:
+            prompt = ChatPromptTemplate.from_messages([
+                    #ChatPromptTemplate:用于生成messages的模版
+                    ("system", PLANNER_PROMPT),
+                    ("user", "{question}")
+            ])
 
+            chain =prompt | structured_llm
+            plan = await chain.ainvoke({"question": user_query})
+
+        output_data = {
+            "steps": [step.model_dump() for step in plan.steps],
+            "rationale": plan.rationale[:200] if plan.rationale else ""
+        }
+        token_used = 0
+
+        async with AsyncSessionLocal() as db:
+            await TraceService.record_run(
+                db=db,
+                task_id=task_id,
+                node_name="planner",
+                node_type="agent",
+                input_data = input_data,
+                output_data = output_data,
+                latency_ms = (time.time() - start_time) * 1000,
+                token_used = token_used,
+                status = "success"
+
+            )
     #3.返回更新（只更新plan 和重置当前步骤索引）
-    return{
-        "plan": plan,
-        "current_step_index": 0  #从头开始执行
-    }
+        return{
+            "plan": plan,
+            "current_step_index": 0  #从头开始执行
+        }
+
+    except Exception as e:
+        #记录失败轨迹到数据库
+        async with AsyncSessionLocal() as db:
+            await TraceService.record_run(
+                db=db,
+                task_id=task_id,
+                node_name="planner",
+                node_type="agent",
+                input_data = input_data,
+                latency_ms = (time.time() - start_time) * 1000,
+                status = "error",
+                error=str(e)
+            )
+        raise

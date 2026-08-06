@@ -6,6 +6,7 @@ from typing import List
 from ...core.database import get_db
 from ...schemas.task import TaskResponse, TaskCreate
 from ...services.task_service import TaskService
+from ...services.trace_service import TraceService
 
 router = APIRouter(prefix="/tasks", tags=["任务管理"])
 
@@ -71,3 +72,44 @@ async def resume_task(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"恢复失败：{str(e)}")
+
+@router.get("/{task_id}/trace")
+async def get_task_trace(
+        task_id: str,
+        db: AsyncSession = Depends(get_db)
+):
+    """获取任务完整执行轨迹（JSON）"""
+    task = await TaskService.get_task_by_id(db, task_id, FIXED_USER_ID)
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+
+    trace = await TraceService.get_task_trace_summary(db, task_id)
+    return trace
+
+@router.get("/{task_id}/trace/raw")
+async def get_task_trace_raw(
+        task_id: str,
+        db: AsyncSession = Depends(get_db)
+):
+    """获取任务执行轨迹原始数据（包含完整输入输出）"""
+    task = await TraceService.get_task_by_id(db, task_id, FIXED_USER_ID)
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+
+    runs = await TraceService.get_task_trace(db, task_id)
+    return [
+        {
+            "node": r.node_name,
+            "type": r.node_type,
+            "node": r.node_name,
+            "type": r.node_type,
+            "input": r.input_data,
+            "output": r.output_data,
+            "latency_ms": r.latency_ms,
+            "tokens": r.token_used,
+            "status": r.status,
+            "error": r.error,
+            "timestamp": r.created_at.isoformat()
+        }
+        for r in runs
+    ]
