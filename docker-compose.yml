@@ -7,16 +7,16 @@ services:
       POSTGRES_PASSWORD: postgres123
       POSTGRES_DB: agentforge
     ports:
-    - "5432:5432"
+      - "5432:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
-    healthcheck:  #这是工程规范，确保数据库完全就绪了再启动后端
-      test: ["CMD-SHELL","pg_isready -U postgres -d agentforge"]
-      interval: 5s #每5S检查一次
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d agentforge"]
+      interval: 5s
       timeout: 5s
       retries: 10
-      start_period: 10s   #启动后延迟10秒再开始执行首次检查（避免容器未初始化而误报）
-    restart: unless-stopped #重启策略：除非被手动停止，否则容器退出或崩溃后总是重启
+      start_period: 10s
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
@@ -26,7 +26,7 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD","redis-cil", "ping"]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -35,11 +35,9 @@ services:
 
   backend:
     build: ./backend
-    #使用./backend文件来构建镜像
     container_name: agentforge-backend
     ports:
       - "8000:8000"
-    #把容器内部的端口映射到宿主机
     env_file:
       - .env
     environment:
@@ -47,20 +45,36 @@ services:
       - HTTPS_PROXY=http://host.docker.internal:33210
       - NO_PROXY=postgres,redis,api.deepseek.com,localhost,127.0.0.1
     volumes:
-      - ./backend/app:/app/app  #挂载本地代码，改完就生效（不用rebuild）
-      #挂载之后，本地修改代码保存之后直接通过“管道”同步进容器内部，加上--reload参数，Uvicorn检测到文件夹变了，瞬间自动重启服务，刷新浏览器就能看到效果
-      #挂载的价值--实现“本地写代码，容器里热更新”
+      - ./backend/app:/app/app
+      - ./uploads:/app/uploads
     depends_on:
       postgres:
-        condition: service_healthy  #等数据库健康了再启动
+        condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   frontend:
     build: ./frontend
+    container_name: agentforge-frontend
     ports:
-      - "80:80"
+      - "8080:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
     volumes:
       - ./frontend/html:/usr/share/nginx/html
 
