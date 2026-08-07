@@ -1,32 +1,42 @@
 services:
   postgres:
     image: pgvector/pgvector:pg15
+    container_name: agentforge-postgres
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres123
       POSTGRES_DB: agentforge
     ports:
     - "5432:5432"
-
-    healthcheck:  #这是工程规范，确保数据库完全就绪了再启动后端
-      test: ["CMD-SHELL","pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
     volumes:
       - pg_data:/var/lib/postgresql/data
+    healthcheck:  #这是工程规范，确保数据库完全就绪了再启动后端
+      test: ["CMD-SHELL","pg_isready -U postgres -d agentforge"]
+      interval: 5s #每5S检查一次
+      timeout: 5s
+      retries: 10
+      start_period: 10s   #启动后延迟10秒再开始执行首次检查（避免容器未初始化而误报）
+    restart: unless-stopped #重启策略：除非被手动停止，否则容器退出或崩溃后总是重启
 
   redis:
     image: redis:7-alpine
+    container_name: agentforge-redis
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD","redis-cil", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
 
   backend:
     build: ./backend
     #使用./backend文件来构建镜像
+    container_name: agentforge-backend
     ports:
       - "8000:8000"
     #把容器内部的端口映射到宿主机

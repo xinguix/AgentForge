@@ -22,9 +22,10 @@ WRITER_PROMPT = """
 1. 结构必须包含： **摘要**、 **核心发现**、 **详细分析** 、**结论与建议** 四个部分。
 2. 语言风格：专业、严谨、客观，避免口语化。
 3. 如果素材不足，请明确指出“基于现有资料，以下信息尚不完整”，而不是胡编乱造。
-4. 在引用具体数据或案例时，注明来源（如“根据搜索结果显示”）
-5. 如果研究素材不足（少于 2 个有效搜索结果），不要强行编造，而是直接回复：‘抱歉，目前公开资料有限，无法生成完整的分析报告。建议您提供更多具体方向或开放相关数据权限。
-6. 今天是{current_date},报告日期请使用今天。
+4. 素材优先级：当素材同时包含【互联网搜索结果】与【企业内部知识库】时，回答用户项目相关问题一律以【企业内部知识库】为准，互联网素材仅作补充。
+5. 在引用具体数据或案例时，注明来源（如“根据搜索结果显示”）
+6. 如果研究素材不足（少于 2 个有效搜索结果），不要强行编造，而是直接回复：‘抱歉，目前公开资料有限，无法生成完整的分析报告。建议您提供更多具体方向或开放相关数据权限。
+7. 今天是{current_date},报告日期请使用今天。
 
 请直接输出 Markdown 格式的报告，不要有任何额外的开场白或结束语。
 """
@@ -53,11 +54,14 @@ async def writer_node(state: AgentState) -> dict:
     try:
         # 2.提取所有研究步骤的中间结果
         intermediate = state.get("intermediate_steps", [])
-        # 筛选出真正有搜索结果的step
+        # 筛选出真正有搜索结果的step,valid:有效的
         valid_results = [s for s in intermediate if s.get("search_result")]
         input_data["valid_results_count"] = len(valid_results)
 
-        if not intermediate or len(valid_results) < 2:
+        fallback_texts = ("未找到相关信息", "搜索失败")
+        if not valid_results or all(
+            any(t in s.get("search_result", "") for t in fallback_texts) for s in valid_results
+        ):
             # 分支1： 先看plan里面有没有research步骤
             plan = state.get("plan")
             has_research_step = False
@@ -81,11 +85,18 @@ async def writer_node(state: AgentState) -> dict:
                 output_data = {"final_answer_preview": final_answer[:500], "mode": "fallback"}
         else:
             # 3.格式化研究素材（让LLM容易理解）
+            INTERNAL_MARK = "[企业内部知识库]"
+            WEB_MARK = ("[互联网搜索结果]")
+
             research_materials = ""
             for idx, step in enumerate(intermediate):
                 if "search_result" in step:
                     step_desc = step.get("step_description", f"步骤{idx + 1}")
                     result = step.get("search_result", "无结果")
+                    #按来源限量：内部知识库全保留，互联网素材截断（防网页噪声占满预算）
+                    if WEB_MARK in result:
+                        internal_part, web_part = result.split(WEB_MARK, 1)
+                        result = internal_part + WEB_MARK + web_part[:1500]
                     research_materials += f"### 研究项{idx + 1}:{step_desc}\n{result}\n\n"
 
             input_data["materials_length"] = len(research_materials)

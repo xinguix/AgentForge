@@ -3,7 +3,7 @@ from langchain_core.output_parsers import PydanticOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from .llm import get_llm
 from .state import AgentState
-from ..schemas.plan import Plan
+from ..schemas.plan import Plan, PlanStep
 from ..core.database import AsyncSessionLocal
 from ..services.trace_service import TraceService
 import time
@@ -26,8 +26,8 @@ PLANNER_PROMPT = """
 2.步骤之间若有依赖关系，请在depends_on 中明确指出。
 3.步骤数量控制在2~5步，不要过度拆解。
 4.最后输出你的规划思路（rationale）。
-5.特殊规则（优先级最高）：如果问题过于简单（少于10个字），只生成一个步骤，该步骤的 agent_type 为 "writer",且depends_on 为空数组。此时无需遵循第3条的数量限制
-6. 除第5条描述的简单问题外，涉及搜索调研的问题，步骤必须成对出现：每个 research 步骤后紧跟一个 reviewer 步骤（审查该步骤的搜索结果质量）。禁止生成 agent_type 为 "writer" 的步骤，最终报告由系统在全部步骤完成后自动生成。
+5.特殊规则（优先级最高）：默认所有问题都需要研究（need_research 必须为 true）。仅当问题属于以下明确类型之一时，need_research 才可为 false：(a) 纯问候/闲聊（如"你好""谢谢"）；(b) 纯创意请求（如"讲个笑话"）；(c) 要求总结当前对话内容。注意：任何涉及具体项目、公司、产品、专有名词、技术栈、数据库、文档内容、数字的问题，你都不具备相关知识，必须将 need_research 设为 true 并通过检索获取答案，严禁凭训练知识猜测。
+6. 除第5条描述的简单问题外（即need_research为 true时），涉及搜索调研的问题，步骤必须成对出现：每个 research 步骤后紧跟一个 reviewer 步骤（审查该步骤的搜索结果质量）。禁止生成 agent_type 为 "writer" 的步骤，最终报告由系统在全部步骤完成后自动生成,步骤描述应尽量保留用户原问题的关键词与问法,不要过度改写。
 
 请严格按照Plan Schema输出。
 """
@@ -62,6 +62,14 @@ async def planner_node(state: AgentState) -> dict:
 
             chain =prompt | structured_llm
             plan = await chain.ainvoke({"question": user_query})
+
+            if not plan.need_research:
+                #简单问题：强制单步writer计划，不信任LLM生成的步骤数量
+                plan = Plan(
+                    steps=[PlanStep(step_id=1, description=user_query, agent_type="writer", depends_on=[])],
+                    rationale=plan.rationale,
+                    need_research=False,
+                )
 
         output_data = {
             "steps": [step.model_dump() for step in plan.steps],

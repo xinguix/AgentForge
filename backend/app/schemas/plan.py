@@ -18,3 +18,4 @@ class Plan(BaseModel):
     """完整的任务计划"""
     steps: List[PlanStep] = Field(..., description="任务步骤列表")
     rationale: str = Field(..., description="制定该计划的理由/思路（用于Trace可视化）")
+    need_research: bool = Field(True, description="该问题是否需要外部检索、研究，False表示可直接回答。")
