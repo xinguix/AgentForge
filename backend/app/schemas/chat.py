@@ -5,6 +5,7 @@ class ChatRequest(BaseModel):
     message: str
     system_prompt: Optional[str] = None #运行前端自定义系统提示词，增加灵活性
     temperature: Optional[float] = 0.7
+    agent_id: Optional[str] = None
 
 class ChatResponse(BaseModel):
     answer: str

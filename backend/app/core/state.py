@@ -34,3 +34,6 @@ class AgentState(TypedDict):
 
     #最终答案（Writer节点写入，供前端展示）
     final_answer: Optional[str]
+
+    #Agent配置（对话选中Agent时注入，供各节点读取）
+    agent_config: Optional[Dict[str, Any]]

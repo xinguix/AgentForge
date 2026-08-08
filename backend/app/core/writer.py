@@ -2,6 +2,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from .llm import get_llm,TokenUsageHandler
 from .state import AgentState
 from ..core.database import AsyncSessionLocal
+from ..models import Agent
 from ..services.trace_service import TraceService
 import time
 import json
@@ -27,11 +28,12 @@ WRITER_PROMPT = """
 6. 如果研究素材不足（少于 2 个有效搜索结果），不要强行编造，而是直接回复：‘抱歉，目前公开资料有限，无法生成完整的分析报告。建议您提供更多具体方向或开放相关数据权限。
 7. 今天是{current_date},报告日期请使用今天。
 
+{agent_instruction}
 请直接输出 Markdown 格式的报告，不要有任何额外的开场白或结束语。
 """
 
 
-async def writer_node(state: AgentState) -> dict:
+async def writer_node(state: AgentState, agent_config=None) -> dict:
     """
     :param state: 将研究结果整合成最终报告。
     """
@@ -73,9 +75,13 @@ async def writer_node(state: AgentState) -> dict:
 
             if not has_research_step:
                 # 简单问题：预期不搜索，这里直接调用大模型回答
+                agent_config = state.get("agent_config")
+                agent_instruction = ""
+                if agent_config and agent_config.get("system_prompt"):
+                    agent_instruction = f"\n【用户自定义 Agent 指令（优先级最高）】\n{agent_config['system_prompt']}\n"
                 final_answer = ""
                 async for chunk in llm.astream([
-                    SystemMessage(content="你是一个知识渊博的AI助手，请直接、准确、简洁地回答用户的问题。"),
+                    SystemMessage(content="你是一个知识渊博的AI助手，请直接、准确、简洁地回答用户的问题。" + agent_instruction),
                     HumanMessage(content=user_query)],
                     config={"callbacks": [usage_handler]},
                 ):
@@ -108,7 +114,12 @@ async def writer_node(state: AgentState) -> dict:
 
             # 4.调用LLM生成报告
             current_date = datetime.now().strftime("%Y-%m-%d")
+            agent_config = state.get("agent_config")
+            agent_instruction = ""
+            if agent_config and agent_config.get("system_prompt"):
+                agent_instruction = f"\n 【用户自定义Agent指令（优先级最高）】\n{agent_config['system_prompt']}\n"
             prompt = WRITER_PROMPT.format(
+                agent_instruction = agent_instruction,
                 user_query=user_query,
                 research_materials=research_materials[:3000],
                 current_date=current_date

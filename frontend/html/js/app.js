@@ -568,12 +568,50 @@ async function uploadDoc(file) {
       <div><dt>${res.chunk_count}</dt><dd>向量分块</dd></div>`;
     $("#kbPreview").textContent = res.content_preview || "(无预览内容)";
     toast("文档已入库：" + file.name, "ok");
+    refreshDocList();
   } catch (e) {
     fill.style.width = "100%";
     fill.style.background = "var(--red)";
     txt.textContent = "上传失败：" + e.message;
     setTimeout(() => { prog.hidden = true; fill.style.background = ""; }, 2600);
     toast("入库失败：" + e.message, "err");
+  }
+}
+
+/* 已入库文档列表：按文件聚合展示块数与入库时间，支持删除 */
+async function refreshDocList() {
+  const box = $("#docList");
+  if (!box) return;
+  try {
+    const docs = await API.listDocuments();
+    if (!docs.length) {
+      box.innerHTML = '<div class="list-empty">暂无文档，先上传一个</div>';
+      return;
+    }
+    box.innerHTML = docs.map(d => `
+      <div class="doc-row">
+        <div class="doc-main">
+          <span class="doc-name" title="${escapeHtml(d.filename)}">${escapeHtml(d.filename)}</span>
+          <span class="doc-meta">${d.chunk_count} 块 · ${d.total_chars} 字符 · ${escapeHtml(d.last_time || "")}</span>
+        </div>
+        <button class="btn-del" data-name="${escapeHtml(d.filename)}" title="删除文档">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>
+          删除
+        </button>
+      </div>`).join("");
+    box.querySelectorAll(".btn-del").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const name = btn.dataset.name;
+        if (!confirm("确认删除文档「" + name + "」及其全部向量分块？")) return;
+        try {
+          await API.deleteDocument(name);
+          toast("文档已删除", "ok");
+          refreshDocList();
+        } catch (err) { toast("删除失败：" + err.message, "err"); }
+      });
+    });
+  } catch (e) {
+    box.innerHTML = '<div class="list-empty">列表加载失败：' + escapeHtml(e.message) + '</div>';
   }
 }
 
@@ -710,9 +748,13 @@ function init() {
   });
   $("#agentRefresh").addEventListener("click", refreshAgentList);
 
+  // 知识库文档列表
+  $("#docRefresh").addEventListener("click", refreshDocList);
+
   // 默认进入对话视图
   refreshTaskList();
   refreshAgentList();
+  refreshDocList();
 }
 
 document.addEventListener("DOMContentLoaded", init);

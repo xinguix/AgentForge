@@ -392,7 +392,7 @@ svg { flex-shrink: 0; }
   padding: 0 13px 9px;
   opacity: 1;
   transition: max-height .3s ease, opacity .25s ease, padding .3s ease;
-  overflow: hidden;
+  overflow-x: hidden; overflow-y: auto;
 }
 .msg-extra.collapsed .tp-body {
   max-height: 0;
@@ -430,7 +430,7 @@ svg { flex-shrink: 0; }
 .tp-node.fail { color: var(--red); opacity: 1; }
 .tp-node.fail i { background: var(--red); border-color: var(--red); }
 .tp-node .tp-detail {
-  width: 100%; overflow: hidden;
+  width: 100%; overflow-x: hidden; overflow-y: auto;
   max-height: 0; opacity: 0;
   transition: max-height .3s var(--ease), opacity .3s var(--ease);
 }
@@ -920,6 +920,28 @@ svg { flex-shrink: 0; }
 .agent-card .btn-del:hover { color: var(--red); border-color: rgba(255, 84, 112, .5); background: rgba(255, 84, 112, .08); }
 .tool-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
 .tool-tag { font-family: var(--mono); font-size: 10.5px; padding: 2px 8px; border-radius: 6px; background: var(--panel-3); border: 1px solid var(--line); color: var(--text-dim); }
+
+/* —— 知识库：已入库文档列表 —— */
+.doc-items { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; max-height: 480px; overflow-y: auto; padding-right: 4px; }
+.doc-row {
+  display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  padding: 12px 14px; border-radius: 10px;
+  background: var(--bg-soft); border: 1px solid var(--line);
+  transition: border-color .2s;
+}
+.doc-row:hover { border-color: var(--line-strong); }
+.doc-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.doc-name { font-family: var(--mono); font-size: 13px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.doc-meta { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+.doc-row .btn-del {
+  display: inline-flex; align-items: center; gap: 5px; flex: none;
+  padding: 5px 11px; border-radius: 7px;
+  background: none; border: 1px solid var(--line);
+  color: var(--muted); font-size: 11.5px; cursor: pointer;
+  transition: all .2s;
+}
+.doc-row .btn-del svg { width: 13px; height: 13px; }
+.doc-row .btn-del:hover { color: var(--red); border-color: rgba(255, 84, 112, .5); background: rgba(255, 84, 112, .08); }
 
 /* 响应式 */
 @media (max-width: 1180px) {

@@ -8,7 +8,7 @@
 <link href="https://cdn.jsdelivr.net/npm/@fontsource/noto-serif-sc@5.3.0/900.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/@fontsource/jetbrains-mono@5.0.16/400.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/@fontsource/jetbrains-mono@5.0.16/600.css" rel="stylesheet">
-<link rel="stylesheet" href="css/app.css?v=5">
+<link rel="stylesheet" href="css/app.css?v=7">
 </head>
 <body>
 
@@ -176,6 +176,16 @@
             <pre id="kbPreview"></pre>
           </div>
         </div>
+        <div class="kb-docs card">
+          <div class="card-head row">
+            <h2>已入库文档</h2>
+            <button class="btn-ghost" id="docRefresh" title="刷新列表">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11A8 8 0 1 0 18.7 16M20 5v6h-6"/></svg>
+              刷新
+            </button>
+          </div>
+          <div class="doc-items" id="docList"><div class="list-empty">暂无文档，先上传一个</div></div>
+        </div>
       </div>
     </section>
 
@@ -219,7 +229,7 @@
 <div class="toast-wrap" id="toastWrap"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
-<script src="js/api.js?v=5"></script>
-<script src="js/app.js?v=5"></script>
+<script src="js/api.js?v=7"></script>
+<script src="js/app.js?v=7"></script>
 </body>
 </html>

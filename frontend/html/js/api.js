@@ -66,6 +66,9 @@ const API = {
     fd.append("file", file);
     return fetch("/api/v1/documents/upload", { method: "POST", body: fd }).then(handleRes);
   },
+  listDocuments: () => fetch("/api/v1/documents/").then(handleRes),
+  deleteDocument: name =>
+    fetch(`/api/v1/documents/${encodeURIComponent(name)}`, { method: "DELETE" }).then(handleRes),
 
   // —— Agents ——
   listAgents: () => fetch("/api/v1/agents/").then(handleRes),

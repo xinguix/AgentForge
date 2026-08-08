@@ -6,12 +6,14 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
+from sqlalchemy import select
 
 from ..core import graph
 from ..core.config import settings
-from ..core.graph import  get_graph
+from ..core.graph import get_graph, agent_node
 from ..core.llm import get_llm
 from ..models import Task
+from ..models.agent import Agent
 from ..models.task import TaskStatus
 from ..schemas.chat import  ChatRequest
 
@@ -65,6 +67,16 @@ class ChatService:
             )
             #json.dumps:将字典转为JSON, ensure_ascii=False不转义非ASCII字符（支持中文）
 
+            #2.Agent注入：传入agent_id就查库拿配置
+            agent_config = None
+            if request.agent_id:
+                agent = (await db.execute(
+                    select(Agent).where(Agent.id == request.agent_id, Agent.user_id == "default_user")
+                )).scalar_one_or_none()
+                if not agent:
+                    raise ValueError(f"Agent 不存在：{request.agent_id}")
+                agent_config = {"id": agent.id, "name": agent.name, "system_prompt": agent.system_prompt, "model": agent.model}
+
            #1.先建任务记录：拿到task_id ,节点内部会自动用state.task_id写trace
             new_task = Task(
                 id=str(uuid.uuid4()),
@@ -82,7 +94,7 @@ class ChatService:
             if request.system_prompt:
                 messages.append(SystemMessage(content=request.system_prompt))
             messages.append(HumanMessage(content=request.message))
-            initial_state = {"messages": messages, "task_id": new_task.id}
+            initial_state = {"messages": messages, "task_id": new_task.id, "agent_config": agent_config}
 
             #3.双模式流式： updates驱动节点指示器，messages驱动writer文字流
             active = None   #当前活跃节点

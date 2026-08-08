@@ -54,10 +54,13 @@ async def planner_node(state: AgentState) -> dict:
             plan = Plan(steps=[], rationale="No user query provided")
 
         else:
+            system_parts = [PLANNER_PROMPT]
+            agent_config = state.get("agent_config")
+            if agent_config and agent_config.get("system_prompt"):
+                system_parts.append("【用户自定义 Agent 指令】\n" + agent_config["system_prompt"])
             prompt = ChatPromptTemplate.from_messages([
-                    #ChatPromptTemplate:用于生成messages的模版
-                    ("system", PLANNER_PROMPT),
-                    ("user", "{question}")
+                ("system", "\n\n".join(system_parts)),
+                ("user", "{question}")
             ])
 
             usage_handler = TokenUsageHandler()
