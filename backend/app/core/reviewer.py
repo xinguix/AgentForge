@@ -1,5 +1,5 @@
 from langchain_core.messages import HumanMessage, SystemMessage
-from .llm import get_llm
+from .llm import get_llm, TokenUsageHandler
 from .state import AgentState
 from ..schemas.plan import PlanStep
 from ..core.database import AsyncSessionLocal
@@ -133,7 +133,8 @@ async def review_node(state: AgentState) -> dict:
             research_summary=research_summary[:1000]
         )
 
-        response = await llm.ainvoke([HumanMessage(content=prompt)])
+        usage_handler = TokenUsageHandler()
+        response = await llm.ainvoke([HumanMessage(content=prompt)], config={"callbacks": [usage_handler]})
         decision = response.content.strip().lower()
 
         # 6.解决决策（容错处理）
@@ -160,7 +161,7 @@ async def review_node(state: AgentState) -> dict:
                 input_data=input_data,
                 output_data=output_data,
                 latency_ms=(time.time() - start_time) * 1000,
-                token_used=0,  # 暂时占位，后续可从LLM响应中提取
+                token_used=usage_handler.total_tokens,
                 status="success"
             )
 

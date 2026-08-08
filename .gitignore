@@ -25,8 +25,11 @@ Thumbs.db
 # 本地挂载的数据卷（如果你在根目录创建了这些文件夹，它们会被忽略）
 postgres_data/
 redis_data/
+uploads/
 *.tar
 docker-compose.override.yml
+# ==================== 模型文件（本地挂载，不入库） ====================
+models/
 
 # ==================== Python 构建和打包 ====================
 build/
@@ -44,3 +47,4 @@ htmlcov/
 
 # ==================== 评估产物（每次运行生成，不入库） ====================
 tests/evaluation_report_*.json
+

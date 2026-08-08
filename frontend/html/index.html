@@ -1,15 +1,225 @@
-<!-- frontend/html/index.html -->
 <!DOCTYPE html>
-<html>
-<head><title>AgentForge</title></head>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AgentForge · 多代理锻造工坊</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link href="https://cdn.jsdelivr.net/npm/@fontsource/noto-serif-sc@5.3.0/900.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/@fontsource/jetbrains-mono@5.0.16/400.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/@fontsource/jetbrains-mono@5.0.16/600.css" rel="stylesheet">
+<link rel="stylesheet" href="css/app.css?v=5">
+</head>
 <body>
-    <h1>AgentForge Running</h1>
-    <p id="status">检测后端...</p>
-    <script>
-        fetch("/api/health")
-            .then(r => r.json())
-            .then(d => document.getElementById("status").innerText = "后端状态: " + d.status)
-            .catch(() => document.getElementById("status").innerText = "后端连接失败");
-    </script>
+
+<!-- 顶部细进度条（任务提交/列表刷新时显示） -->
+<div class="top-progress" id="topProgress"></div>
+
+<!-- ============ 侧栏 ============ -->
+<aside class="sidebar">
+  <div class="brand">
+    <div class="brand-mark" aria-hidden="true">
+      <svg viewBox="0 0 48 48" fill="none">
+        <path d="M14 30 L34 10 L40 16 L20 36 Z" fill="currentColor" opacity=".25"/>
+        <path d="M10 40 L38 40" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+        <path d="M24 26 L30 32" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="24" cy="26" r="3" fill="currentColor"/>
+      </svg>
+    </div>
+    <div class="brand-text">
+      <span class="brand-name">AgentForge</span>
+      <span class="brand-sub">多代理锻造工坊</span>
+    </div>
+  </div>
+
+  <nav class="nav" aria-label="主导航">
+    <button class="nav-item active" data-view="chat">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-8 8H4l2.5-2.5A8 8 0 1 1 21 12Z"/><path d="M8.5 10.5h7M8.5 14h4"/></svg>
+      <span>对话</span>
+    </button>
+    <button class="nav-item" data-view="tasks">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/><circle cx="12" cy="12" r="3.2"/></svg>
+      <span>任务记录</span>
+    </button>
+    <button class="nav-item" data-view="kb">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15.5H6.5A2.5 2.5 0 0 0 4 21Z"/><path d="M4 18.5A2.5 2.5 0 0 1 6.5 16H20"/><path d="M8 8h8M8 11.5h5"/></svg>
+      <span>知识库</span>
+    </button>
+    <button class="nav-item" data-view="agents">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="3"/><path d="M9 9h6v6H9z" fill="currentColor" stroke="none" opacity=".55"/><path d="M12 15.5V21M12 3v2"/></svg>
+      <span>Agents</span>
+    </button>
+  </nav>
+
+  <div class="sidebar-foot">
+    <div class="health-row">
+      <span class="health-dot" id="healthDot"></span>
+      <span id="healthText">检测后端…</span>
+    </div>
+    <div class="env-badge" id="envBadge">env · --</div>
+  </div>
+</aside>
+
+<!-- ============ 主区 ============ -->
+<div class="main">
+  <header class="topbar">
+    <h1 class="view-title" id="viewTitle">对话</h1>
+    <div class="topbar-meta">
+      <span class="meta-chip" id="metaModel">deepseek-chat</span>
+      <span class="meta-chip clock" id="clock">--:--:--</span>
+    </div>
+  </header>
+
+  <main class="content">
+
+    <!-- ====== 视图：对话 ====== -->
+    <section id="view-chat" class="view active">
+      <div class="chat-shell">
+        <div class="chat-messages" id="chatMessages">
+          <div class="chat-empty">
+            <div class="empty-mark">
+              <svg viewBox="0 0 48 48" fill="none"><path d="M14 30 L34 10 L40 16 L20 36 Z" fill="currentColor" opacity=".3"/><path d="M10 40 L38 40" stroke="currentColor" stroke-width="3" stroke-linecap="round"/><circle cx="24" cy="26" r="3" fill="currentColor"/></svg>
+            </div>
+            <h2>向锻造炉投料</h2>
+            <p>一个问题投进去，Planner 拆解 · Research 检索 · Reviewer 质检 · Writer 成文</p>
+            <div class="example-chips" id="exampleChips">
+              <button class="chip" data-q="介绍一下 AgentForge 项目的整体架构">介绍一下 AgentForge 项目的整体架构</button>
+              <button class="chip" data-q="什么是人工智能？">什么是人工智能？</button>
+              <button class="chip" data-q="你好">你好</button>
+            </div>
+          </div>
+        </div>
+        <div class="chat-input-bar">
+          <textarea id="chatInput" rows="1" placeholder="输入消息，Enter 发送 / Shift+Enter 换行"></textarea>
+          <div class="chat-actions">
+            <label class="agent-select">
+              <span>Agent</span>
+              <select id="chatAgent"><option value="">默认</option></select>
+            </label>
+            <details class="adv" id="advPanel">
+              <summary>高级</summary>
+              <div class="adv-body">
+                <label class="adv-field">
+                  <span>系统提示词</span>
+                  <textarea id="chatSystemPrompt" rows="3" placeholder="（可选）自定义系统提示词"></textarea>
+                </label>
+                <label class="adv-field">
+                  <span>温度 <b id="tempVal">0.7</b></span>
+                  <input type="range" id="chatTemp" min="0" max="1.5" step="0.1" value="0.7">
+                </label>
+              </div>
+            </details>
+            <button class="btn-stop" id="chatStop" hidden>停止</button>
+            <button class="btn-send" id="chatSend">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M13 6l6 6-6 6"/></svg>
+              <span>投料</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====== 视图：任务记录 ====== -->
+    <section id="view-tasks" class="view">
+      <div class="task-layout">
+        <div class="task-list card">
+          <div class="card-head row">
+            <h2>任务记录</h2>
+            <button class="btn-ghost" id="taskRefresh">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11A8 8 0 1 0 18.7 16M20 5v6h-6"/></svg>
+              刷新
+            </button>
+          </div>
+          <div class="filter-row" id="taskFilterRow">
+            <div class="filter-chips" id="taskFilterChips">
+              <button class="chip on" data-filter="all">全部</button>
+              <button class="chip" data-filter="completed">已完成</button>
+              <button class="chip" data-filter="failed">失败</button>
+            </div>
+            <input class="task-search" id="taskSearch" type="search" placeholder="搜索任务…">
+          </div>
+          <div class="task-items" id="taskList"><div class="list-empty">暂无任务记录</div></div>
+        </div>
+        <div class="task-detail card" id="taskDetail">
+          <div class="detail-empty">选中左侧任务，查看计划 · 轨迹 · 报告</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====== 视图：知识库 ====== -->
+    <section id="view-kb" class="view">
+      <div class="kb-layout">
+        <div class="kb-upload card">
+          <div class="card-head">
+            <h2>文档入库</h2>
+            <p>上传后自动解析文本，bge-small-zh 向量化，进入 pgvector 供 Research 检索</p>
+          </div>
+          <div class="dropzone" id="dropzone">
+            <input type="file" id="kbFile" accept=".pdf,.md,.txt,.docx" hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
+            <p>拖拽文件到此处，或 <b>点击选择</b></p>
+            <em>支持 PDF / Markdown / TXT / DOCX</em>
+          </div>
+          <div class="kb-progress" id="kbProgress" hidden>
+            <div class="bar"><i id="kbBarFill"></i></div>
+            <span id="kbBarText">上传中…</span>
+          </div>
+        </div>
+        <div class="kb-result card" id="kbResult" hidden>
+          <div class="card-head row">
+            <h2>入库结果</h2>
+            <span class="tag tag-ok">indexed</span>
+          </div>
+          <dl class="kb-stats" id="kbStats"></dl>
+          <div class="kb-preview">
+            <h3>内容预览</h3>
+            <pre id="kbPreview"></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====== 视图：Agents ====== -->
+    <section id="view-agents" class="view">
+      <div class="agents-layout">
+        <div class="agent-create card">
+          <div class="card-head">
+            <h2>铸造新 Agent</h2>
+            <p>配置名称、模型与系统提示词，绑定工具与知识库</p>
+          </div>
+          <form id="agentForm" class="agent-form">
+            <label class="f-field"><span>名称 *</span><input name="name" required maxlength="50" placeholder="例如：行业分析员"></label>
+            <label class="f-field"><span>模型 *</span><input name="model" required value="deepseek-chat" placeholder="deepseek-chat"></label>
+            <label class="f-field"><span>描述</span><input name="description" placeholder="一句话说明职责"></label>
+            <label class="f-field"><span>系统提示词</span><textarea name="system_prompt" rows="4" placeholder="（可选）该 Agent 的行为准则"></textarea></label>
+            <label class="f-field"><span>工具（逗号分隔）</span><input name="tools" placeholder="web_search, vector_search"></label>
+            <button class="btn-send" type="submit">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+              <span>铸造</span>
+            </button>
+          </form>
+        </div>
+        <div class="agent-list card">
+          <div class="card-head row">
+            <h2>Agent 列表</h2>
+            <button class="btn-ghost" id="agentRefresh">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11A8 8 0 1 0 18.7 16M20 5v6h-6"/></svg>
+              刷新
+            </button>
+          </div>
+          <div class="agent-items" id="agentList"><div class="list-empty">暂无 Agent，先铸造一个</div></div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- 全局 Toast -->
+<div class="toast-wrap" id="toastWrap"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="js/api.js?v=5"></script>
+<script src="js/app.js?v=5"></script>
 </body>
 </html>

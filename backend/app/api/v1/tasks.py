@@ -92,7 +92,7 @@ async def get_task_trace_raw(
         db: AsyncSession = Depends(get_db)
 ):
     """获取任务执行轨迹原始数据（包含完整输入输出）"""
-    task = await TraceService.get_task_by_id(db, task_id, FIXED_USER_ID)
+    task = await TaskService.get_task_by_id(db, task_id, FIXED_USER_ID)
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
 
@@ -101,10 +101,8 @@ async def get_task_trace_raw(
         {
             "node": r.node_name,
             "type": r.node_type,
-            "node": r.node_name,
-            "type": r.node_type,
-            "input": r.input_data,
-            "output": r.output_data,
+            "input": r.input,
+            "output": r.output,
             "latency_ms": r.latency_ms,
             "tokens": r.token_used,
             "status": r.status,

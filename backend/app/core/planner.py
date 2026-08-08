@@ -1,7 +1,7 @@
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.output_parsers import PydanticOutputParser
 from langchain_core.prompts import ChatPromptTemplate
-from .llm import get_llm
+from .llm import get_llm, TokenUsageHandler
 from .state import AgentState
 from ..schemas.plan import Plan, PlanStep
 from ..core.database import AsyncSessionLocal
@@ -60,8 +60,9 @@ async def planner_node(state: AgentState) -> dict:
                     ("user", "{question}")
             ])
 
+            usage_handler = TokenUsageHandler()
             chain =prompt | structured_llm
-            plan = await chain.ainvoke({"question": user_query})
+            plan = await chain.ainvoke({"question": user_query}, config={"callbacks": [usage_handler]})
 
             if not plan.need_research:
                 #简单问题：强制单步writer计划，不信任LLM生成的步骤数量
@@ -75,7 +76,7 @@ async def planner_node(state: AgentState) -> dict:
             "steps": [step.model_dump() for step in plan.steps],
             "rationale": plan.rationale[:200] if plan.rationale else ""
         }
-        token_used = 0
+        token_used = usage_handler.total_tokens
 
         async with AsyncSessionLocal() as db:
             await TraceService.record_run(

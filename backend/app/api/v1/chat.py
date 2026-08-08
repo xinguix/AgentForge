@@ -1,8 +1,10 @@
 from typing import AsyncGenerator
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import StreamingResponse
 
+from ...core.database import get_db
 from ...schemas.chat import  ChatRequest,ChatResponse
 from ...services.chat_service import  ChatService
 
@@ -23,7 +25,7 @@ async def chat(request: ChatRequest):
 
 #流式输出
 @router.post("/stream")
-async def chat_stream(request: ChatRequest) -> StreamingResponse:
+async def chat_stream(request: ChatRequest, db: AsyncSession = Depends(get_db)) -> StreamingResponse:
     """
     SSE流式输出，前端使用EventSource或fetch API读取
     AsyncGenerator的完整写法：AsyncGenerator[YieldType, SendType]
@@ -33,13 +35,16 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
     try:
         #返回StreamingResponse,media_type必须是text/event-stream
         return StreamingResponse(
-            ChatService.stream_response(request),
+            ChatService.stream_response(request, db),
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",
                 #禁止缓存
                 "Connection": "Keep-alive",
                 #保持长连接
+
+                "X-Accel-Buffering": "no",
+
                 #允许跨域（开发环境方便调试）
                 "Access-Control-Allow-Origin": "*",
             }

@@ -16,7 +16,7 @@ RUN --mount=type=cache,target=/root/.cache/pip pip install -r requirements.txt -
 COPY ./app /app/app
 
 #注意：这里的启动命令加了 --reload，方便本地改代码热更新
-CMD ["uvicorn","app.main:app","--host","0.0.0.0","--port","8080","--reload"]
+CMD ["uvicorn","app.main:app","--host","0.0.0.0","--port","8000","--reload"]
 #--reload 本地改了main.py文件不用手动重启Uvicorn，他会自动检测文件变动并重启进程，刷新浏览器就能看到新效果
 #线上禁用--reload原因：1.性能开销：他会不断检视硬盘文件变化，消耗cpu
 #2.安全隐患：万一线上代码被篡改，他会自动重启加载恶意代码

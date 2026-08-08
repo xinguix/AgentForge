@@ -1,5 +1,5 @@
 from langchain_core.messages import SystemMessage, HumanMessage
-from .llm import get_llm
+from .llm import get_llm,TokenUsageHandler
 from .state import AgentState
 from ..core.database import AsyncSessionLocal
 from ..services.trace_service import TraceService
@@ -53,6 +53,7 @@ async def writer_node(state: AgentState) -> dict:
 
     try:
         # 2.提取所有研究步骤的中间结果
+        usage_handler = TokenUsageHandler()
         intermediate = state.get("intermediate_steps", [])
         # 筛选出真正有搜索结果的step,valid:有效的
         valid_results = [s for s in intermediate if s.get("search_result")]
@@ -72,12 +73,16 @@ async def writer_node(state: AgentState) -> dict:
 
             if not has_research_step:
                 # 简单问题：预期不搜索，这里直接调用大模型回答
-                response = await llm.ainvoke([
+                final_answer = ""
+                async for chunk in llm.astream([
                     SystemMessage(content="你是一个知识渊博的AI助手，请直接、准确、简洁地回答用户的问题。"),
-                    HumanMessage(content=user_query)
-                ])
-                final_answer = response.content.strip()
+                    HumanMessage(content=user_query)],
+                    config={"callbacks": [usage_handler]},
+                ):
+                    final_answer += chunk.content or ""
+                final_answer = final_answer.strip()
                 output_data = {"final_answer_preview": final_answer[:500], "mode": "direct_answer"}
+
             else:
                 # 复杂问题但是搜索失败：如实告知，不硬答、不浪费token
                 fallback_answer = "抱歉，由于未能获取到足够的研究资料，暂时无法生成完整报告。请检查搜索配置或稍后重试。"
@@ -109,8 +114,10 @@ async def writer_node(state: AgentState) -> dict:
                 current_date=current_date
             )
 
-            response = await llm.ainvoke([HumanMessage(content=prompt)])
-            final_answer = response.content.strip()
+            final_answer = ""
+            async for chunk in llm.astream([HumanMessage(content=prompt)], config={"callbacks": [usage_handler]}):
+                final_answer += chunk.content or ""
+            final_answer = final_answer.strip()
             output_data = {"final_answer_preview": final_answer[:500], "mode": "report_generation"}
 
         # 记录成功轨迹
@@ -123,7 +130,7 @@ async def writer_node(state: AgentState) -> dict:
                 input_data=input_data,
                 output_data=output_data,
                 latency_ms=(time.time() - start_time) * 1000,
-                token_used=0,  # 暂时占位
+                token_used=usage_handler.total_tokens,
                 status="success"
             )
 

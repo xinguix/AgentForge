@@ -44,9 +44,12 @@ services:
       - HTTP_PROXY=http://host.docker.internal:33210
       - HTTPS_PROXY=http://host.docker.internal:33210
       - NO_PROXY=postgres,redis,api.deepseek.com,localhost,127.0.0.1
+      - HF_HUB_OFFLINE=1
+      - WATCHFILES_FORCE_POLLING=true
     volumes:
       - ./backend/app:/app/app
       - ./uploads:/app/uploads
+      - ./models/hf-cache:/root/.cache/huggingface
     depends_on:
       postgres:
         condition: service_healthy
